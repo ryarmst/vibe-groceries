@@ -530,7 +530,7 @@ async def shopping_get_past_orders(limit: Annotated[int, Field(ge=1, le=50)] = 1
     imported. Needs the retailer session."""
     summaries = await context.client().list_past_orders()
     with session_scope() as session:
-        imported = {o.id for o in session.scalars(select(PastOrder.id))}
+        imported = set(session.scalars(select(PastOrder.id)))
         return {"orders": [{**ords.summary_dict(s, None), "imported": s.order_id in imported} for s in summaries[:limit]]}
 
 

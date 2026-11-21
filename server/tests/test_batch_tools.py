@@ -57,3 +57,19 @@ async def test_search_many(fake):
     assert 0 < len(hits) <= 3 and all("gone_EA" != h["product_id"] for h in hits)
     assert set(hits[0]) <= set(mcp.COMPACT_KEYS)
     assert r["results"]["zzz-nothing"] == []
+
+
+async def test_get_past_orders_marks_imported(fake, monkeypatch):
+    from shopping.models import PastOrder, utcnow
+    from shopping.retailer.normalize import PastOrderSummary
+
+    async def list_past_orders():
+        return [PastOrderSummary("111", "2026-11-17T10:00:00Z", 75.6, "NOFRILLS", "DELIVERY", None),
+                PastOrderSummary("222", "2026-11-08T10:00:00Z", 176.26, "NOFRILLS", "DELIVERY", None)]
+
+    fake.list_past_orders = list_past_orders
+    with session_scope() as s:
+        if s.get(PastOrder, "111") is None:
+            s.add(PastOrder(id="111", placed_at=utcnow()))
+    r = await mcp.shopping_get_past_orders(limit=5)
+    assert {o["order_id"]: o["imported"] for o in r["orders"]} == {"111": True, "222": False}

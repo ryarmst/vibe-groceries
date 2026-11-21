@@ -12,17 +12,18 @@ export async function render(el) {
     const assessBtn = h("button", { class: "primary", disabled: status.running, onclick: (e) => busy(e.target, async () => {
       const r = await post("/api/deals/assess");
       toast(r.message);
-      if (r.started) watch();
+      watch();
       await draw();
     }) }, status.running ? "Assessing…" : "Assess deals");
     el.append(h("div", { class: "between" }, h("h1", {}, "Deals"),
       h("div", { class: "row" }, h("span", { class: "small muted" },
-        status.running ? "Scanning every aisle and ranking deals (about 3 minutes)…"
+        status.running ? "Checking prices, ranking deals and asking the assistant for discoveries…"
           : scan.last_scan ? `${scan.deals_known_now} items on sale · checked ${ago(scan.last_scan.finished_at)}` : "Not checked yet"),
         assessBtn)));
 
     el.append(h("h2", {}, "Today's top deals"),
-      h("p", { class: "small muted" }, "Standout prices on things you buy, ranked against your own price history. Updated every morning."));
+      h("p", { class: "small muted" }, "Standout prices on things you buy (ranked against your own price history), plus the assistant's picks: ",
+        "great deals on things you haven't tried yet. Updated every morning."));
     if (!top.deals.length) el.append(empty(status.running ? "Working on it…" : "No standout deals right now. Try Assess deals."));
     for (const d of top.deals) el.append(topDeal(d, draw));
 
@@ -74,7 +75,7 @@ function productRow(p) {
 
 function topDeal(d, redraw) {
   const note = h("input", { placeholder: "Why not? (optional)", style: { flex: 1, minWidth: "160px" } });
-  const who = { auto: "daily check", agent: "assistant", user: "you" }[d.added_by] || d.added_by;
+  const who = { auto: "daily check", review: "assistant's pick", agent: "assistant", user: "you" }[d.added_by] || d.added_by;
   return h("section", { class: "card" },
     h("div", { class: "between" }, h("h3", {}, d.relevant_to || d.aisle || "Deal"),
       h("span", { class: "row small" }, h("span", { class: "muted" }, `from ${who}`), h("span", { class: `badge ${d.rating === 3 ? "sale" : "ok"}` }, "★".repeat(d.rating), " ", d.rating_label))),

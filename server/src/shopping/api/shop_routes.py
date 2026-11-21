@@ -321,10 +321,10 @@ async def deals_assess():
         return {"started": False, "message": "Already assessing deals."}
     if fresh:
         result = await deals_job.run(scan=False)
-        return {"started": False, "done": True, **result,
-                "message": f"{result['top_deals']} top deals ({result['new']} new)." + (f" {result['alerts']} stock-up alert(s)." if result["alerts"] else "")}
+        deals_job.start(scan=False)
+        return {"started": True, "message": "Ranking this morning's prices and asking the assistant for discoveries…"}
     deals_job.start(scan=True)
-    return {"started": True, "message": "Scanning every aisle, then assessing: about 3 minutes."}
+    return {"started": True, "message": "Scanning every aisle, ranking deals, then asking the assistant: about 3–4 minutes."}
 
 
 @router.get("/deals/assess")

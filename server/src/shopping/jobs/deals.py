@@ -21,12 +21,27 @@ async def run(*, scan: bool = True) -> dict:
     """Scan (when asked and the last scan is older than 20 h), then refresh Today's top deals and alert."""
     with session_scope() as session:
         last = catalog.last_scan(session)
-        alerts_on = appsettings.get(session, "jobs").get("deal_alerts", True)
+        jobs = appsettings.get(session, "jobs")
+        alerts_on, review_on = jobs.get("deal_alerts", True), jobs.get("deal_review", True)
     if scan and (last is None or last.started_at < utcnow() - timedelta(hours=20)) and not catalog.scan_running():
         await catalog.scan_deals(context.client(), session_scope, store_id=settings.store_id)
     with session_scope() as session:
         result = assess.assess(session, store_id=settings.store_id)
-        alerts = [deals.deal_dict(session, d, store_id=settings.store_id) for d in result.pop("stock_up_alerts")]
+        alert_ids = [d.id for d in result.pop("stock_up_alerts")]
+    if review_on:
+        from shopping.agent import deal_review
+
+        try:
+            reviewed = await deal_review.review(store_id=settings.store_id)
+        except Exception as exc:  # noqa: BLE001 - the rule-based list stands on its own
+            log.warning("deal review failed: %s", exc)
+            reviewed = {"picks": 0, "alerts": [], "skipped": str(exc)}
+        result["assistant_picks"] = reviewed.get("picks", 0)
+        if reviewed.get("skipped"):
+            result["review_skipped"] = reviewed["skipped"]
+        alert_ids += reviewed.get("alerts", [])
+    with session_scope() as session:
+        alerts = [deals.deal_dict(session, deals.get_deal(session, i), store_id=settings.store_id) for i in alert_ids]
         for a in alerts:
             price = f" ${a['price']:.2f}" if a.get("price") is not None else ""
             inbox.post(session, kind="deal_alert", title=f"Stock-up price: {a['product']}{price}",

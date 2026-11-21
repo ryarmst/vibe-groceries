@@ -186,12 +186,14 @@ function jobsCard(j) {
   const orders = h("input", { type: "checkbox", checked: j.order_import_enabled });
   const dealsHour = h("input", { type: "number", min: 0, max: 23, value: j.deals_hour, style: { width: "5em" } });
   const alerts = h("input", { type: "checkbox", checked: j.deal_alerts });
+  const review = h("input", { type: "checkbox", checked: j.deal_review });
   return section("Schedule",
     h("label", { class: "row" }, enabled, "Plan the week automatically (meals + a shopping run to review)"),
     h("div", { class: "form-grid" }, field("Day (new flyer: Thursday)", dayIn), field("Hour", hour), field("Meals per week", meals)),
     h("label", { class: "row", style: { marginTop: "10px" } }, checkins, "Daily check-in on planned meals at", checkinHour, ":00"),
     h("label", { class: "row" }, orders, "Import new No Frills orders each evening (when the session is connected)"),
     h("label", { class: "row", style: { marginTop: "10px" } }, "Check deals every day at", dealsHour, ":00 (no No Frills login needed)"),
+    h("label", { class: "row" }, review, "Also ask the assistant for discoveries (great deals on things you haven't bought; one LLM call a day)"),
     h("label", { class: "row" }, alerts, "Send a phone alert for stock-up deals (needs an ntfy topic under API keys)",
       h("button", { class: "link", onclick: async (e) => {
         const r = await busy(e.target, () => post("/api/settings/notify/test"));
@@ -203,7 +205,7 @@ function jobsCard(j) {
       await put("/api/settings/jobs", { weekly_plan_enabled: enabled.checked, weekly_plan_weekday: Number(dayIn.value),
         weekly_plan_hour: Number(hour.value), meals_per_week: Number(meals.value), checkins_enabled: checkins.checked,
         checkin_hour: Number(checkinHour.value), order_import_enabled: orders.checked,
-        deals_hour: Number(dealsHour.value), deal_alerts: alerts.checked });
+        deals_hour: Number(dealsHour.value), deal_alerts: alerts.checked, deal_review: review.checked });
       toast("Schedule saved.");
     }) }, "Save schedule")));
 }

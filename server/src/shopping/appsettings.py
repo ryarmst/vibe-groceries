@@ -61,6 +61,7 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "order_import_enabled": True,
         "deals_hour": 6,  # daily: scan the store's deals, then refresh Today's top deals
         "deal_alerts": True,  # push stock-up deals to ntfy (when a topic is set)
+        "deal_review": True,  # after the rules, ask the LLM for discoveries (one call per assessment)
     },
 }
 

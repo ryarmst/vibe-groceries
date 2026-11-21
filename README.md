@@ -29,7 +29,11 @@ Design: [docs/](docs/README.md). v1 (LAN app + MCP, `ryarmst/grocery-assist`) ke
 the pantry, grocery list or Cooking show a confirmation card first, and nothing goes into the cart unless
 a person approved it.
 
-## Deploy (VPS)
+## Deploy
+
+**At home behind a Cloudflare Tunnel** (what we run): see [deploy/cloudflare/README.md](deploy/cloudflare/README.md).
+
+### On a VPS (Caddy)
 
 Requirements: a small VPS (1 GB RAM is plenty) with Docker, and a domain name pointing at it.
 

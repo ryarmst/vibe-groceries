@@ -41,13 +41,14 @@ def main(argv: list[str] | None = None) -> int:
 
     run_migrations()
     ca_dir = settings.data_dir / "ca"
+    public_dir = settings.data_dir / "public"  # shared read-only with the proxy (only ca.pem goes here)
     if args.cmd == "ca":
-        print(certs.init_ca(ca_dir))
+        print(certs.init_ca(ca_dir, public_dir=public_dir))
         return 0
     if args.cmd == "pair":
         fingerprint = None
         if args.cert:
-            certs.init_ca(ca_dir)
+            certs.init_ca(ca_dir, public_dir=public_dir)
             p12, password, fingerprint = certs.issue_client_cert(ca_dir, args.name)
             out_dir = Path(args.out) if args.out else settings.data_dir / "certs"
             out_dir.mkdir(parents=True, exist_ok=True)

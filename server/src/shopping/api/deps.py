@@ -19,6 +19,7 @@ from shopping.core.service import ShoppingError
 from shopping.database import session_scope
 from shopping.models import utcnow
 from shopping.retailer.client import RetailerError, RetailerUnavailable
+from shopping.notion.client import NotionError
 from shopping.secrets.vault import VaultError
 
 log = logging.getLogger(__name__)
@@ -111,3 +112,7 @@ def install_error_handlers(app) -> None:
     @app.exception_handler(VaultError)
     async def _vault(_, exc):
         return err(400, str(exc))
+
+    @app.exception_handler(NotionError)
+    async def _notion(_, exc):
+        return err(502 if (exc.status or 0) >= 500 else 400, str(exc), "notion_error")

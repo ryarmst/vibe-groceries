@@ -81,6 +81,25 @@ async def import_orders() -> int:
     return n
 
 
+def backup_database(keep: int = 7) -> str:
+    """SQLite online backup into DATA_DIR/backups (kept 7 days). Copy that folder off the server for safety."""
+    import sqlite3
+
+    out_dir = settings.data_dir / "backups"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"app-{date.today():%Y%m%d}.db"
+    src = sqlite3.connect(settings.db_path)
+    dst = sqlite3.connect(target)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+    for old in sorted(out_dir.glob("app-*.db"))[:-keep]:
+        old.unlink()
+    return str(target)
+
+
 async def tick(now: datetime) -> None:
     with session_scope() as session:
         jobs = appsettings.get(session, "jobs")
@@ -93,6 +112,9 @@ async def tick(now: datetime) -> None:
                     and ((days_in == 0 and now.hour >= int(jobs["weekly_plan_hour"])) or days_in == 1))
         due_checkin = jobs["checkins_enabled"] and now.hour >= int(jobs["checkin_hour"]) and _marker(session, "checkins") != today
         due_orders = jobs["order_import_enabled"] and now.hour >= 20 and _marker(session, "orders") != today
+        due_backup = now.hour >= 3 and _marker(session, "backup") != today
+        if due_backup:
+            _set_marker(session, "backup", today)
         if due_plan:
             _set_marker(session, "weekly_plan", week)
         if due_checkin:
@@ -101,6 +123,11 @@ async def tick(now: datetime) -> None:
             _set_marker(session, "orders", today)
         else:
             due_orders = False
+    if due_backup:
+        try:
+            log.info("backup written: %s", await asyncio.to_thread(backup_database))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("backup failed: %s", exc)
     if due_plan:
         log.info("weekly plan: starting for week of %s", week)
         weekly.start_in_background()

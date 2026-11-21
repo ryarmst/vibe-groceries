@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Vibe Groceries",
+  "version": "2.0.0",
+  "description": "Household grocery and meal assistant: review shopping runs, plan meals around deals, chat with the assistant.",
+  "browser_specific_settings": {
+    "gecko": { "id": "vibe-groceries@ryarmst", "strict_min_version": "128.0" }
+  },
+  "permissions": ["storage", "alarms", "cookies"],
+  "host_permissions": ["https://*.nofrills.ca/*"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": { "scripts": ["background.js"], "type": "module" },
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_icon": "icons/icon.svg",
+    "default_title": "Vibe Groceries"
+  },
+  "sidebar_action": {
+    "default_panel": "ui/sidebar.html",
+    "default_title": "Vibe Groceries",
+    "default_icon": "icons/icon.svg",
+    "open_at_install": false
+  },
+  "icons": { "48": "icons/icon.svg", "96": "icons/icon.svg" },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+  }
+}

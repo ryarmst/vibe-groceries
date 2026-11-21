@@ -22,7 +22,9 @@ from shopping.auth.session import AuthRequired
 from shopping.core.service import ShoppingError
 from shopping.database import session_scope
 from shopping.models import AgentAudit
+from shopping.notion.client import NotionError
 from shopping.retailer.client import RetailerError
+from shopping.secrets.vault import VaultError
 
 log = logging.getLogger(__name__)
 
@@ -108,7 +110,7 @@ async def execute(tool: Tool, args: dict, ctx: ToolContext) -> tuple[bool, str]:
         text, ok = _shorten(result), True
     except ValidationError as exc:
         text, ok = f"Invalid arguments: {exc.errors()[:5]}", False
-    except (ShoppingError, RetailerError, AuthRequired, ValueError, LookupError) as exc:
+    except (ShoppingError, RetailerError, AuthRequired, NotionError, VaultError, ValueError, LookupError) as exc:
         text, ok = f"Error: {exc}", False
     except Exception as exc:  # noqa: BLE001 - report, don't crash the conversation
         log.exception("tool %s crashed", tool.name)

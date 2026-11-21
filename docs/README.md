@@ -1,7 +1,7 @@
-# grocery-assist v2: design
+# vibe-groceries: design
 
-Status: **draft, first decisions made** (2026-11-20). Nothing here is built yet. Decisions are recorded below;
-the remaining open questions are at the end.
+Status: **built** (2026-11-20), from this design. Decisions are recorded below. Where the code differs, the code wins;
+see the root README for how to deploy and use it.
 
 v2 moves the app from a LAN box to an internet-facing VPS. A browser extension becomes the only client.
 The server runs the shopping app, an LLM agent that can use several providers, and a Notion client. The
@@ -63,14 +63,10 @@ These come from what the household wants: eat well for less, with little effort 
 - If the VPS is blocked by No Frills: **decide after spike S1**.
 - Promotion to Cooking and `Regular Recipe?` are **separate decisions** (the agent offers the second).
 
-## Open questions
-1. **Who uses it.** Just you and Steph? Should notes and ratings record who made them? (The design
-   assumes yes: each paired device has a name.)
-2. **Notifications.** Is the extension badge enough, or do you also want phone push (for example ntfy)
-   when the weekly plan is ready? (A phone isn't a client, but it could still get a heads-up.)
-3. **Spend cap.** Mostly moot on the free tier; for the paid "smart" model, what monthly cap? (Proposed: $10,
-   with a warning at 80%.)
-4. **v1.** Should the Plex instance keep running until v2 is proven (proposed), with its data migrated
-   at cut-over?
-5. **Groceries ↔ meals.** Do you want the optional `For Meals` relation on Groceries (see
-   notion-suggested-meals.md)? It lets a rejected meal's ingredients be dropped before they're bought.
+## Answers to the earlier open questions
+- **Users:** Ryan and Steph, one paired browser each; notes and ratings record the device.
+- **Phone notifications:** none; the extension badge only.
+- **Budget:** default $10/month, adjustable any time in Settings (quick buttons) or with `MONTHLY_BUDGET_USD`.
+- **v1:** keeps running on the Plex box for now.
+- **Suggested Meals:** the database will be created later; the app works without it and picks it up when
+  its id is saved in Settings.

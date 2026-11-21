@@ -26,13 +26,14 @@ def _write_private(path: Path, data: bytes) -> None:
         fh.write(data)
 
 
-def init_ca(ca_dir: Path, name: str = "vibe-groceries client CA") -> Path:
-    """Create the CA once; returns the path of ca.pem (give this to the proxy)."""
+def init_ca(ca_dir: Path, name: str = "vibe-groceries client CA", *, public_dir: Path | None = None) -> Path:
+    """Create the CA once; returns the path of the public ca.pem for the proxy. The private key stays in
+    ca_dir (mode 0700); only the certificate is copied to public_dir, which the proxy mounts read-only."""
     ca_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(ca_dir, 0o700)
     key_path, pem_path = ca_dir / "ca.key", ca_dir / "ca.pem"
     if key_path.exists() and pem_path.exists():
-        return pem_path
+        return _publish(pem_path, public_dir)
     key = ec.generate_private_key(ec.SECP256R1())
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
     now = dt.datetime.now(dt.timezone.utc)
@@ -46,7 +47,17 @@ def init_ca(ca_dir: Path, name: str = "vibe-groceries client CA") -> Path:
             .sign(key, hashes.SHA256()))
     _write_private(key_path, key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
     pem_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    return pem_path
+    return _publish(pem_path, public_dir)
+
+
+def _publish(pem_path: Path, public_dir: Path | None) -> Path:
+    if public_dir is None:
+        return pem_path
+    public_dir.mkdir(parents=True, exist_ok=True)
+    out = public_dir / "ca.pem"
+    out.write_bytes(pem_path.read_bytes())
+    os.chmod(out, 0o644)
+    return out
 
 
 def issue_client_cert(ca_dir: Path, device_name: str, *, days: int = 730) -> tuple[bytes, str, str]:

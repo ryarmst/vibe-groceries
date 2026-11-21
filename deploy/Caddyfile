@@ -1,0 +1,42 @@
+# DOMAIN, ACME_EMAIL and MTLS_MODE (on/off) come from .env.
+{
+	email {$ACME_EMAIL}
+}
+
+(client_cert_off) {
+}
+
+(client_cert_on) {
+	tls {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /ca/ca.pem
+		}
+	}
+}
+
+{$DOMAIN} {
+	import client_cert_{$MTLS_MODE:off}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+
+	# Never trust a client-supplied certificate header; set it only from the verified TLS connection.
+	request_header -X-Client-Cert-Sha256
+
+	@app path /api/* /healthz
+	handle @app {
+		reverse_proxy app:8000 {
+			header_up X-Client-Cert-Sha256 {http.request.tls.client.fingerprint}
+			flush_interval -1
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

@@ -10,7 +10,7 @@ async function request(path, { method = "GET", body, signal } = {}, retry = true
   if (!cfg.serverUrl) throw new ApiError("Not paired with a server yet. Open Settings.", 0, "not_paired");
   const token = await accessToken();
   const res = await fetch(cfg.serverUrl + path, {
-    method, signal, credentials: "omit",
+    method, signal, credentials: "include" /* client certificates count as credentials: "omit" would withhold the mTLS cert */,
     headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });

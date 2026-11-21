@@ -34,7 +34,7 @@ export async function requestServerPermission(serverUrl) {
 
 async function postJSON(url, body) {
   const res = await fetch(url, {
-    method: "POST", credentials: "omit", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    method: "POST", credentials: "include" /* client certificates count as credentials: "omit" would withhold the mTLS cert */, headers: { "content-type": "application/json" }, body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Server returned ${res.status}`);

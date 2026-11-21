@@ -157,7 +157,7 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
             try:
                 with session_scope() as session:
                     provider = providers.build(session, context.vault, provider_name)
-                for attempt in range(2):
+                for attempt in range(3):
                     try:
                         quota.note_request(provider_name, model)
                         async for ev in provider.stream(system=system, messages=history, tools=specs, model=model,
@@ -175,10 +175,12 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
                         break
                     except ProviderError as exc:
                         kind = quota.classify_error(provider_name, model, exc)
-                        if attempt == 0 and not text and (kind == "minute" or (exc.retryable and kind is None)):
-                            pause = 20 if kind == "minute" else 2
-                            if kind == "minute":
-                                yield {"type": "notice", "text": f"{model} is busy (per-minute limit); retrying in {pause}s…"}
+                        if exc.status is not None and exc.status not in (401, 403):
+                            with session_scope() as session:
+                                quota.record_failed_attempt(session, provider_name, model, thread_id)
+                        if attempt < 2 and not text and (kind == "minute" or (exc.retryable and kind is None)):
+                            pause = 20 if kind == "minute" else (3 if attempt == 0 else 8)  # 503s and timeouts: back off
+                            yield {"type": "notice", "text": f"{model} is busy; retrying in {pause}s…"}
                             await asyncio.sleep(pause)
                             continue
                         raise

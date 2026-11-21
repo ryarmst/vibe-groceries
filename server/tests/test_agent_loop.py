@@ -231,3 +231,31 @@ async def test_exhausted_model_is_skipped_for_the_other_tier(monkeypatch, tools,
     with session_scope() as s:
         appsettings.update(s, "llm", {"limits": {"gemini-flash-latest": {"rpm": 5, "rpd": 20}}})
         s.query(LLMUsage).filter_by(model="gemini-flash-lite-latest").delete()
+
+
+async def test_busy_model_retried_with_backoff_and_attempts_counted(monkeypatch, tools, clean_quota):
+    sleeps = []
+
+    async def no_sleep(s):
+        sleeps.append(s)
+
+    monkeypatch.setattr(loop.asyncio, "sleep", no_sleep)
+
+    class Flaky(FakeProvider):
+        failures = 2
+
+        async def stream(self, **kw):
+            if self.failures:
+                self.failures -= 1
+                raise ProviderError("busy", retryable=True, status=503)
+            async for ev in super().stream(**kw):
+                yield ev
+
+    use(monkeypatch, Flaky([[TextDelta("Answer after retries.")]]))
+    with session_scope() as s:
+        before = s.query(LLMUsage).filter_by(model="gemini-flash-lite-latest").count()
+    evs = await collect(loop.run(new_thread(), user_text="hello", mode="ask"))
+    assert any(e.get("text") == "Answer after retries." for e in evs) and sleeps == [3, 8]
+    with session_scope() as s:
+        rows = s.query(LLMUsage).filter_by(model="gemini-flash-lite-latest").count() - before
+        assert rows == 3  # two failed attempts + the successful call: all count toward Google's daily quota

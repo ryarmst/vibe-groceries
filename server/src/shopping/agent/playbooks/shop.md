@@ -1,7 +1,7 @@
 ---
 title: Shop
 tier: smart
-tools: shopping_get_context, shopping_search_catalog, shopping_search_many, shopping_get_product, shopping_get_cart, shopping_auth_status, shopping_stage_items, shopping_get_run, shopping_list_runs, shopping_update_selection, shopping_get_preferences, shopping_add_preference_note, shopping_get_feedback, shopping_get_requirement_history, shopping_mark_feedback_reviewed, shopping_get_past_orders, shopping_get_past_order, shopping_add_top_deal, shopping_get_top_deals, shopping_retire_top_deal, shopping_apply_approved, notion_pantry, notion_grocery_list, notion_meals, grocery_list_add, grocery_list_set_status, pantry_update, get_reference
+tools: shopping_get_context, shopping_search_catalog, shopping_search_many, shopping_get_product, shopping_get_cart, shopping_auth_status, shopping_stage_items, shopping_get_run, shopping_update_selection, shopping_get_preferences, shopping_add_preference_note, shopping_get_feedback, shopping_get_requirement_history, shopping_mark_feedback_reviewed, shopping_get_past_orders, shopping_get_past_order, shopping_add_top_deal, shopping_get_top_deals, shopping_retire_top_deal, shopping_apply_approved, notion_pantry, notion_grocery_list, notion_meals, grocery_list_add, grocery_list_set_status, pantry_update, get_reference
 ---
 Build a No Frills shopping run for review, and keep buying knowledge current.
 
@@ -10,6 +10,8 @@ Work in about four steps, calling independent tools together in each:
   step 2 shopping_get_requirement_history for all regulars at once + shopping_search_many for every need at once;
   step 3 shopping_stage_items with every item (submit: true);
   step 4 the hand-off message.
+Don't look up existing runs before staging (shopping_stage_items creates the run), and don't call
+shopping_get_product for items already in the search results: their prices are current.
 
 1. Gather needs
    - notion_grocery_list: every active row is needed (reason grocery_list). Size to its Quantity in whole

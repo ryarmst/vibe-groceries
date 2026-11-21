@@ -72,6 +72,11 @@ def note_request(provider: str, model: str) -> None:
     _recent[_key(provider, model)].append(time.monotonic())
 
 
+def record_failed_attempt(session: Session, provider: str, model: str, thread_id: str | None = None) -> None:
+    """Google counts failed requests against the daily quota too; so do we (zero tokens, zero cost)."""
+    session.add(LLMUsage(provider=provider, model=model, tokens_in=0, tokens_out=0, cost_usd=0.0, thread_id=thread_id))
+
+
 def classify_error(provider: str, model: str, exc) -> str | None:
     """'daily' (model done for today: skip it), 'minute' (wait and retry), or None."""
     if getattr(exc, "status", None) != 429:

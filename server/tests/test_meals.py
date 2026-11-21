@@ -58,7 +58,8 @@ async def test_candidates_and_cost(session):
     assert out["expiring_on_hand"][0]["name"] == "Cilantro"
     assert out["discovery_mode"] and out["note"]
     saved = [c["name"] for c in out["saved_recipes"]]
-    assert saved == ["Cilantro Lime Rice", "Stewed Pork"]  # uses up the cilantro (10) > main ingredient on sale (6)
+    assert saved == ["Stewed Pork", "Cilantro Lime Rice"]  # main ingredient on sale (6) > a possible use-up (4)
+    assert out["saved_recipes"][1]["uses_up"][0]["match"] == "possible"
     cost = planner.cost_manifest(session, "Serves: 6\nPork Shoulder | 3 lb\nCilantro | 1 bunch\nUnobtainium | 1")
     assert cost["estimated_total"] == 14.15 and cost["per_serving"] == 2.36 and cost["not_found"] == ["Unobtainium"]
 

@@ -122,8 +122,11 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
         for key, hit in expiring_names.items():
             exact = any(norm(n) == key for n in names)
             if (exact or (loose and _words(hit["Name"]) & words)) and all(u["name"] != hit["Name"] for u in out):
-                out.append({"name": hit["Name"], "expires": hit["Expiration"]})
+                out.append({"name": hit["Name"], "expires": hit["Expiration"], **({} if exact else {"match": "possible"})})
         return out
+
+    def use_up_points(uses_up: list[dict]) -> int:
+        return sum(4 if u.get("match") == "possible" else 10 for u in uses_up)
 
     def deal_for(name: str, *, strict: bool = False) -> dict | None:
         p = priced(name)
@@ -158,7 +161,7 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
             uses_up = uses_up_for([main, r.get("Name") or ""], loose=True)
             deal = None if norm(main) in GENERIC_MAIN else deal_for(main, strict=True)
             last, cooked_recently, rejected, adj = history(r.get("Name"))
-            score = 10 * len(uses_up) + (6 if deal else 0) + adj
+            score = use_up_points(uses_up) + (6 if deal else 0) + adj
             if score <= 0:
                 continue  # nothing about this week favours it
             saved.append({"cooking_id": r["id"], "name": r.get("Name"), "kind": "saved_recipe", "tags": r.get("Tags"),
@@ -171,7 +174,8 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
         "discovery_mode": discovery,
         "note": ("Few regular recipes yet: the household is still finding its regulars. Draw on saved_recipes (their Cooking "
                  "pages have the method; read one with notion_get_page) and new dishes built around the best deals; "
-                 "after a meal is cooked and liked, offer to promote it and, if it keeps coming back, to make it a regular.")
+                 "after a meal is cooked and liked, offer to promote it and, if it keeps coming back, to make it a regular. "
+                 "A uses_up entry marked match=possible only shares a word (e.g. beef): judge whether the dish really uses it.")
                 if discovery else None,
         "regular_recipes": out[:limit],
         "saved_recipes": saved[:limit],

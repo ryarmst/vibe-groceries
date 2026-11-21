@@ -82,3 +82,12 @@ def test_insecure_topic_refused(monkeypatch):
         push.topic_url()
     with session_scope() as s:
         context.vault.delete(s, push.SECRET)
+
+
+def test_topic_forms():
+    assert push.normalize_topic("vibe-groceries-k3j9") == "https://ntfy.sh/vibe-groceries-k3j9"
+    assert push.normalize_topic("ntfy.sh/abc") == "https://ntfy.sh/abc"
+    assert push.normalize_topic("https://ntfy.example.org/abc") == "https://ntfy.example.org/abc"
+    assert push.normalize_topic("  ") is None
+    with pytest.raises(push.NotifyError):
+        push.normalize_topic("http://ntfy.sh/abc")

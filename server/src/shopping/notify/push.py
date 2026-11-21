@@ -21,12 +21,23 @@ class NotifyError(Exception):
     pass
 
 
+def normalize_topic(value: str | None) -> str | None:
+    """Accept a bare topic name, "ntfy.sh/name" or a full https URL. Plain http is refused (the topic is a secret)."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    if v.startswith("http://"):
+        raise NotifyError("Use https:// for the ntfy topic (the topic name works like a password).")
+    if v.startswith("https://"):
+        return v
+    if "/" in v:
+        return "https://" + v
+    return "https://ntfy.sh/" + v
+
+
 def topic_url() -> str | None:
     with session_scope() as session:
-        url = context.vault.get(session, SECRET)
-    if url and not url.startswith("https://"):
-        raise NotifyError("The ntfy topic must be an https:// URL.")
-    return url
+        return normalize_topic(context.vault.get(session, SECRET))
 
 
 async def send(title: str, message: str, *, click: str | None = None, priority: int = 4,

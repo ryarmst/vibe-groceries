@@ -199,8 +199,9 @@ function jobsCard(j) {
         const r = await busy(e.target, () => post("/api/settings/notify/test"));
         toast(r.ok ? "Test alert sent." : r.error, r.ok ? "ok" : "err");
       } }, "Send test alert")),
-    h("p", { class: "small muted" }, "ntfy: install the ntfy app, subscribe to a long random topic name (e.g. vibe-groceries-", "k3j9x…), ",
-      "and save https://ntfy.sh/<that name> as the ntfy topic URL. Anyone who knows the name can read the alerts, so keep it random."),
+    h("p", { class: "small muted" }, "ntfy: install the ntfy app and subscribe to a long random topic name (e.g. vibe-groceries-k3j9x…), ",
+      "then save that name under API keys → ntfy topic (just the name is fine; a full https:// URL works too, e.g. for your own ntfy server). ",
+      "Anyone who knows the name can read the alerts, so keep it random."),
     h("div", { class: "row", style: { marginTop: "8px" } }, h("button", { class: "primary", onclick: (e) => busy(e.target, async () => {
       await put("/api/settings/jobs", { weekly_plan_enabled: enabled.checked, weekly_plan_weekday: Number(dayIn.value),
         weekly_plan_hour: Number(hour.value), meals_per_week: Number(meals.value), checkins_enabled: checkins.checked,

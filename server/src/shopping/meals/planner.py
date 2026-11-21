@@ -75,6 +75,14 @@ def cost_manifest(session: Session, manifest: str) -> dict:
 
 
 DISCOVERY_REGULARS = 8  # fewer regular recipes than this: the household is still finding its regulars
+MEAL_COURSES = {"Main", "Soup", "Salad", "Breakfast"}  # saved recipes worth planning a meal around (or no Course set)
+GENERIC_MAIN = {"fruit", "vegetable", "vegetables", "veg", "fish", "meat", "seafood", "various", "mixed", "dairy",
+                "grain", "grains", "bean", "beans", "herb", "herbs", "spice", "spices", "other", "none"}
+STOP = {"and", "with", "the", "of", "in", "fresh", "frozen", "ground", "whole", "boneless", "skinless", "large", "small"}
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in norm(text).split() if len(w) > 2 and w not in STOP}
 
 
 async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int = 7, limit: int = 12) -> dict:
@@ -106,16 +114,21 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
         adj = -(15 if cooked_recently else 0) - (20 if rejected else 0) + (5 if last and last.get("Status") == "Promoted" else 0)
         return last, cooked_recently, rejected, adj
 
-    def uses_up_for(names: list[str]) -> list[dict]:
+    def uses_up_for(names: list[str], *, loose: bool = False) -> list[dict]:
+        """Expiring pantry items this dish uses: exact name matches, or (loose, for saved recipes) a shared
+        key word, so main ingredient "Beef" or a recipe called "Beef Tacos" uses up "Ground Beef"."""
         out = []
-        for n in names:
-            hit = expiring_names.get(norm(n))
-            if hit and all(u["name"] != hit["Name"] for u in out):
+        words = set().union(*(_words(n) for n in names)) if loose else set()
+        for key, hit in expiring_names.items():
+            exact = any(norm(n) == key for n in names)
+            if (exact or (loose and _words(hit["Name"]) & words)) and all(u["name"] != hit["Name"] for u in out):
                 out.append({"name": hit["Name"], "expires": hit["Expiration"]})
         return out
 
-    def deal_for(name: str) -> dict | None:
+    def deal_for(name: str, *, strict: bool = False) -> dict | None:
         p = priced(name)
+        if strict and p and not (_words(name) & _words(p["name"])):
+            return None  # the product must actually be that ingredient (not just share an aisle)
         if p and p.get("discount_pct"):
             return {"ingredient": name, "product": p["name"], "price": p["price"], "discount_pct": p["discount_pct"], "ends": p.get("deal_ends")}
         return None
@@ -140,10 +153,10 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
         regular_ids = {r["id"] for r in regulars}
         for r in await kitchen.cooking_search(recipes_only=True, limit=400):
             main = (r.get("Main Ingredient") or "").strip()
-            if r["id"] in regular_ids or not main:
+            if r["id"] in regular_ids or not main or (r.get("Course") and r["Course"] not in MEAL_COURSES):
                 continue
-            uses_up = uses_up_for([main, r.get("Name") or ""])
-            deal = deal_for(main)
+            uses_up = uses_up_for([main, r.get("Name") or ""], loose=True)
+            deal = None if norm(main) in GENERIC_MAIN else deal_for(main, strict=True)
             last, cooked_recently, rejected, adj = history(r.get("Name"))
             score = 10 * len(uses_up) + (6 if deal else 0) + adj
             if score <= 0:

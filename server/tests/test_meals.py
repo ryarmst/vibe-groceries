@@ -44,6 +44,9 @@ async def test_candidates_and_cost(session):
     fake.add(COOKING, {"Name": T("Cilantro Lime Rice"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Cilantro")})
     fake.add(COOKING, {"Name": T("Stewed Pork"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Pork Shoulder")})
     fake.add(COOKING, {"Name": T("Plain Rice"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Rice")})  # nothing favours it
+    fake.add(COOKING, {"Name": T("Fruit Salad"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Fruit")})  # too generic
+    fake.add(COOKING, {"Name": T("Cilantro Chutney"), "Type": {"name": "Recipe"}, "Course": {"name": "Sauce/Condiment"},
+                       "Main Ingredient": T("Cilantro")})  # not a meal
     kmod._schema_cache.clear()
     client = NotionClient("x", transport=httpx.MockTransport(fake.handler))
     client.MIN_INTERVAL = 0

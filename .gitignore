@@ -1,0 +1,22 @@
+# Secrets and local data: never commit
+.env
+*.env
+!.env.example
+server/data/
+data/
+*.p12
+*.key
+*.pem
+!deploy/**/*.example.pem
+*.har
+user.txt
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Extension build output
+extension/dist/
+*.xpi

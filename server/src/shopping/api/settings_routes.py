@@ -1,0 +1,49 @@
+"""Settings: write-only secrets, LLM tiers and budget, Notion databases, jobs."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from shopping import appsettings, context
+from shopping.api.deps import Caller, require_device
+from shopping.database import session_scope
+
+router = APIRouter(prefix="/api/settings")
+
+
+class SecretBody(BaseModel):
+    value: str = Field(min_length=1, max_length=8192)
+
+
+@router.get("/secrets")
+def secrets_status(_: Caller = Depends(require_device)):
+    with session_scope() as session:
+        return {"secrets": context.vault.status(session)}
+
+
+@router.put("/secrets/{name}")
+def set_secret(name: str, body: SecretBody, caller: Caller = Depends(require_device)):
+    if name == "retailer:access_token":
+        return {"error": "Use /api/retailer/session."}
+    with session_scope() as session:
+        context.vault.set(session, name, body.value, by=caller.device_id)
+        return {"ok": True, "secrets": context.vault.status(session)}  # status only; the value never comes back
+
+
+@router.delete("/secrets/{name}")
+def delete_secret(name: str, _: Caller = Depends(require_device)):
+    with session_scope() as session:
+        return {"deleted": context.vault.delete(session, name), "secrets": context.vault.status(session)}
+
+
+@router.get("")
+def all_settings(_: Caller = Depends(require_device)):
+    with session_scope() as session:
+        return {s: appsettings.get(session, s) for s in appsettings.DEFAULTS} | {"providers": sorted(appsettings.PROVIDERS)}
+
+
+@router.put("/{section}")
+def update_section(section: str, changes: dict, _: Caller = Depends(require_device)):
+    with session_scope() as session:
+        return {section: appsettings.update(session, section, changes)}

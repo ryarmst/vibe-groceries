@@ -22,6 +22,8 @@ class ToolCall:
     id: str
     name: str
     arguments: dict
+    # Provider data that must be sent back with this call, e.g. Gemini's {"google": {"thought_signature": …}}.
+    extra: dict | None = None
 
 
 @dataclass

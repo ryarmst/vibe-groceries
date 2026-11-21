@@ -201,7 +201,8 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
         yield {"type": "usage", "provider": used[0], "model": used[1], "tokens_in": usage.input_tokens,
                "tokens_out": usage.output_tokens, "cost_usd": cost}
         _add_message(thread_id, role="assistant", content=text,
-                     tool_calls=[{"id": c.id, "name": c.name, "arguments": c.arguments} for c in calls],
+                     tool_calls=[{"id": c.id, "name": c.name, "arguments": c.arguments, **({"extra": c.extra} if c.extra else {})}
+                                 for c in calls],
                      provider=used[0], model=used[1], tokens_in=usage.input_tokens, tokens_out=usage.output_tokens, cost_usd=cost)
         if not calls:
             yield {"type": "done", "awaiting_confirmation": False}

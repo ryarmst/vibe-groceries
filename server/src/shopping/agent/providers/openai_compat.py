@@ -49,9 +49,12 @@ def to_openai_messages(system: str, messages: list[dict]) -> list[dict]:
         if m["role"] == "assistant":
             msg = {"role": "assistant", "content": m.get("content") or None}
             if m.get("tool_calls"):
-                msg["tool_calls"] = [{"id": c["id"], "type": "function",
-                                      "function": {"name": c["name"], "arguments": json.dumps(c.get("arguments") or {})}}
-                                     for c in m["tool_calls"]]
+                msg["tool_calls"] = []
+                for c in m["tool_calls"]:
+                    call = {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": json.dumps(c.get("arguments") or {})}}
+                    if c.get("extra"):
+                        call["extra_content"] = c["extra"]  # Gemini requires its thought signature back, unchanged
+                    msg["tool_calls"].append(call)
             if msg["content"] is None and not msg.get("tool_calls"):
                 msg["content"] = ""
             out.append(msg)
@@ -128,7 +131,9 @@ class OpenAICompatible:
                             if delta.get("content"):
                                 yield TextDelta(delta["content"])
                             for tc in delta.get("tool_calls") or []:
-                                slot = calls.setdefault(int(tc.get("index", len(calls))), {"id": None, "name": "", "args": ""})
+                                slot = calls.setdefault(int(tc.get("index", len(calls))), {"id": None, "name": "", "args": "", "extra": None})
+                                if tc.get("extra_content"):
+                                    slot["extra"] = tc["extra_content"]
                                 slot["id"] = tc.get("id") or slot["id"]
                                 fn = tc.get("function") or {}
                                 if fn.get("name"):
@@ -145,6 +150,7 @@ class OpenAICompatible:
                 args = json.loads(slot["args"]) if slot["args"].strip() else {}
             except ValueError:
                 args = {"_unparsed": slot["args"][:2000]}
-            yield ToolCall(slot["id"] or f"call_{uuid.uuid4().hex[:12]}", slot["name"], args if isinstance(args, dict) else {"value": args})
+            yield ToolCall(slot["id"] or f"call_{uuid.uuid4().hex[:12]}", slot["name"], args if isinstance(args, dict) else {"value": args},
+                           extra=slot["extra"])
         yield usage
         yield Done("tool_calls" if calls else stop)

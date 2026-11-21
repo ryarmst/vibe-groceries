@@ -102,3 +102,29 @@ def test_simplify_schema_drops_unsupported_keywords():
     assert s == {"type": "object", "properties": {"a": {"type": "integer", "minimum": 1},
                                                   "b": {"type": "array", "items": {"type": "string"}, "description": "list"},
                                                   "c": {"type": "string"}}, "required": ["a"]}
+
+
+
+async def test_gemini_thought_signature_round_trip():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        if len(sent) == 1:
+            body = sse([{"choices": [{"delta": {"tool_calls": [{"index": 0, "id": "c1", "type": "function",
+                         "extra_content": {"google": {"thought_signature": "SIG123"}},
+                         "function": {"name": "notion_pantry", "arguments": "{}"}}]}}]}, "[DONE]"])
+        else:
+            body = sse([{"choices": [{"delta": {"content": "done"}}]}, "[DONE]"])
+        return httpx.Response(200, text=body)
+
+    p = OpenAICompatible(name="gemini", base_url="https://g/v1", api_key="k", transport=httpx.MockTransport(handler))
+    evs = await collect(p.stream(system="", messages=[{"role": "user", "content": "hi"}], tools=[], model="m", temperature=0, max_tokens=50))
+    call = next(e for e in evs if isinstance(e, ToolCall))
+    assert call.extra == {"google": {"thought_signature": "SIG123"}}
+    history = [{"role": "user", "content": "hi"},
+               {"role": "assistant", "content": "", "tool_calls": [{"id": call.id, "name": call.name, "arguments": {}, "extra": call.extra}]},
+               {"role": "tool", "tool_call_id": call.id, "name": call.name, "content": "[]"}]
+    await collect(p.stream(system="", messages=history, tools=[], model="m", temperature=0, max_tokens=50))
+    echoed = sent[1]["messages"][1]["tool_calls"][0]
+    assert echoed["extra_content"] == {"google": {"thought_signature": "SIG123"}}

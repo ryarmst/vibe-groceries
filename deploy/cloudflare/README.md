@@ -58,6 +58,22 @@ Cloudflare side, then pairing.
 
 Now anything without one of your certificates gets a Cloudflare block page before it reaches home.
 
+### Important: HTTP/3 breaks client certificates
+
+Firefox reaches Cloudflare over HTTP/3 (QUIC) when it's on, and then **doesn't present the client
+certificate**: every request gets Cloudflare's 403, with no certificate prompt. Turn HTTP/3 off for the zone:
+
+- ryarmst.ca → **Speed** → **Optimization** → **Protocol Optimization** → **HTTP/3 (with QUIC)**: **Off**.
+  Browsers fall back to HTTP/2 and send the certificate. This affects every hostname on the zone, harmlessly.
+- Alternatively, per browser: `about:config` → `network.http.http3.enable` = `false`, then restart Firefox.
+
+Other causes of a 403 without a certificate prompt:
+- A connection from before the certificate was imported is being reused. Quit Firefox fully and reopen it.
+- The certificate isn't under **Your Certificates**.
+
+**Security → Events** in Cloudflare shows, for each blocked request, whether a certificate was presented and
+whether it verified.
+
 ## 4. Pair each browser
 
 1. On the Plex box, create a pairing code bound to that browser's certificate. Pass the certificate file

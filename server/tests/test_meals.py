@@ -38,6 +38,7 @@ async def test_candidates_and_cost(session):
     fake = FakeNotion()
     soon = (date.today() + timedelta(days=2)).isoformat()
     fake.add(PANTRY, {"Name": T("Cilantro"), "Expiration": {"start": soon}})
+    fake.add(PANTRY, {"Name": T("Ground Pork"), "Expiration": {"start": soon}})
     fake.add(COOKING, {"Name": T("Carnitas"), "Regular Recipe?": True, "Shopping Ingredients": T("Serves: 6\nPork Shoulder | 3 lb\nCilantro | 1 bunch")})
     fake.add(COOKING, {"Name": T("Plain Toast"), "Regular Recipe?": True, "Shopping Ingredients": T("Serves: 2\nBread | 1 loaf")})
     fake.add(MEALS, {"Name": T("Plain Toast"), "Status": {"name": "Rejected"}, "Feedback": T("boring")})
@@ -55,11 +56,14 @@ async def test_candidates_and_cost(session):
     first, last = out["regular_recipes"][0], out["regular_recipes"][-1]
     assert first["name"] == "Carnitas" and first["uses_up"][0]["name"] == "Cilantro" and first["ingredients_on_sale"]
     assert last["name"] == "Plain Toast" and last["previously_rejected"] and last["last_feedback"] == "boring"
-    assert out["expiring_on_hand"][0]["name"] == "Cilantro"
+    assert {e["name"] for e in out["expiring_on_hand"]} == {"Cilantro", "Ground Pork"}
     assert out["discovery_mode"] and out["note"]
     saved = [c["name"] for c in out["saved_recipes"]]
-    assert saved == ["Stewed Pork", "Cilantro Lime Rice"]  # main ingredient on sale (6) > a possible use-up (4)
-    assert out["saved_recipes"][1]["uses_up"][0]["match"] == "possible"
+    by = {c["name"]: c for c in out["saved_recipes"]}
+    assert set(by) == {"Cilantro Lime Rice", "Stewed Pork"}  # generic, non-meal and unfavoured recipes are left out
+    assert by["Cilantro Lime Rice"]["uses_up"] == [{"name": "Cilantro", "expires": soon}] and by["Cilantro Lime Rice"]["score"] == 10
+    assert by["Stewed Pork"]["main_ingredient_deal"] and by["Stewed Pork"]["uses_up"][0] == {"name": "Ground Pork", "expires": soon, "match": "possible"}
+    assert by["Stewed Pork"]["score"] == 6 + 4  # pork on sale + a word-only (possible) use-up
     cost = planner.cost_manifest(session, "Serves: 6\nPork Shoulder | 3 lb\nCilantro | 1 bunch\nUnobtainium | 1")
     assert cost["estimated_total"] == 14.15 and cost["per_serving"] == 2.36 and cost["not_found"] == ["Unobtainium"]
 

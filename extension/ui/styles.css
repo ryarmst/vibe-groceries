@@ -24,6 +24,7 @@ label { font-size: 13px; color: var(--muted); }
 .brand { font-weight: 700; margin-right: 10px; text-decoration: none; color: var(--text); }
 nav a { text-decoration: none; color: var(--muted); padding: 4px 8px; border-radius: 6px; font-size: 14px; }
 nav a.on { color: var(--text); background: var(--chip); font-weight: 600; }
+a.pill:hover { border-color: var(--accent); }
 .pill { margin-left: auto; font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .pill.connected { color: var(--ok); } .pill.expired, .pill.required { color: var(--warn); }
 main { max-width: 1040px; margin: 0 auto; padding: 12px 16px 90px; }

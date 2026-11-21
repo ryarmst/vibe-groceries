@@ -21,7 +21,9 @@ if (!cfg.serverUrl) {
   if (!inbox || inbox.error) box.append(h("p", { class: "small bad" }, inbox?.error || "Can't reach the server."));
   else {
     const s = inbox.retailer_session;
-    box.append(h("p", { class: "small" }, s.state === "connected" ? `🟢 No Frills connected (${Math.floor(s.seconds_remaining / 60)} min)` : "🟠 No Frills: visit nofrills.ca while logged in"),
+    const nf = (text) => h("a", { href: "https://www.nofrills.ca/", onclick: (e) => { e.preventDefault(); browser.tabs.create({ url: "https://www.nofrills.ca/" }); window.close(); } }, text);
+    box.append(h("p", { class: "small" }, s.state === "connected" ? ["🟢 ", nf("No Frills"), ` connected (${Math.floor(s.seconds_remaining / 60)} min)`]
+      : ["🟠 ", nf("Open nofrills.ca"), " and log in to connect"]),
       h("p", { class: "small muted" }, "Deals scanned ", inbox.deal_scan.last ? ago(inbox.deal_scan.last.finished_at) : "never"));
     if (!inbox.items.length) box.append(h("p", { class: "small muted" }, "Nothing needs you."));
     for (const item of inbox.items.slice(0, 6)) box.append(h("div", { class: "small", style: { padding: "4px 0" } }, "• ",

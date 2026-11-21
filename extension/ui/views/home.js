@@ -17,7 +17,8 @@ export async function render(el) {
       }) }, "Plan the week now"))));
   const s = inbox.retailer_session;
   el.append(h("p", { class: "muted small" },
-    s.state === "connected" ? `No Frills session connected (${Math.floor(s.seconds_remaining / 60)} min left).` : "No Frills session not connected: visit nofrills.ca while logged in.",
+    s.state === "connected" ? `No Frills session connected (${Math.floor(s.seconds_remaining / 60)} min left). ` : "No Frills session not connected: ",
+    h("a", { href: "https://www.nofrills.ca/", target: "_blank", rel: "noopener noreferrer" }, s.state === "connected" ? "open nofrills.ca" : "open nofrills.ca and log in"), ".",
     " · Deals scanned ", inbox.deal_scan.last ? ago(inbox.deal_scan.last.finished_at) : "never", inbox.deal_scan.running ? " (scanning now)" : "",
     inbox.cart.pending ? ` · adding ${inbox.cart.pending} item(s) to the cart…` : ""));
   el.append(h("h2", {}, "Needs you"));

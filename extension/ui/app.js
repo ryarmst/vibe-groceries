@@ -62,7 +62,7 @@ async function sessionPill() {
     const s = await get("/api/retailer/session");
     pill.className = `pill ${s.state}`;
     pill.textContent = s.state === "connected" ? `No Frills · ${Math.floor(s.seconds_remaining / 60)} min` : "No Frills: open nofrills.ca to connect";
-    pill.title = "The extension sends your No Frills session to the server when you visit nofrills.ca while logged in.";
+    pill.title = "Open nofrills.ca. While you're logged in there, the extension keeps the session connected.";
   } catch {
     pill.textContent = "Not connected";
   }
@@ -72,3 +72,5 @@ window.addEventListener("hashchange", route);
 route();
 sessionPill();
 setInterval(sessionPill, 60_000);
+// Coming back from nofrills.ca: give the background a moment to send the fresh session, then refresh the pill.
+window.addEventListener("focus", () => setTimeout(sessionPill, 2500));

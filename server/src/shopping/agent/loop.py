@@ -23,7 +23,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from shopping import appsettings, context
-from shopping.agent import budget, playbooks
+from shopping.agent import budget, playbooks, quota
 from shopping.agent.providers import registry as providers
 from shopping.agent.providers.base import Done, ProviderError, TextDelta, ToolCall, Usage
 from shopping.agent.tools import CONFIRM, ToolContext, audit, execute, preview_text, registry
@@ -67,9 +67,11 @@ def _system(pb: playbooks.Playbook, device_name: str, jobs: dict) -> str:
 
 
 def _candidates(llm: dict, tier: str) -> list[tuple[str, str]]:
+    """The tier's model, then the other tier's (a separate free quota), then any configured fallbacks."""
     first = llm["tiers"].get(tier) or llm["tiers"]["fast"]
+    other = llm["tiers"]["smart" if tier == "fast" else "fast"]
     seen, out = set(), []
-    for c in [first] + list(llm.get("fallback") or []):
+    for c in [first, other] + list(llm.get("fallback") or []):
         key = (c["provider"], c["model"])
         if key not in seen:
             seen.add(key)
@@ -144,11 +146,20 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
 
         text, calls, usage, used, last_error = "", [], Usage(), None, None
         for provider_name, model in _candidates(llm, pb.tier):
+            with session_scope() as session:
+                ok, reason, wait = quota.check(session, llm, provider_name, model)
+            if not ok:
+                yield {"type": "notice", "text": f"{reason}; using the next model."}
+                continue
+            if wait > 0:
+                yield {"type": "notice", "text": f"Pausing {wait:.0f}s for {model}'s per-minute limit…"}
+                await asyncio.sleep(wait)
             try:
                 with session_scope() as session:
                     provider = providers.build(session, context.vault, provider_name)
                 for attempt in range(2):
                     try:
+                        quota.note_request(provider_name, model)
                         async for ev in provider.stream(system=system, messages=history, tools=specs, model=model,
                                                         temperature=float(llm.get("temperature", 0.4)), max_tokens=MAX_TOKENS):
                             if isinstance(ev, TextDelta):
@@ -163,8 +174,12 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
                         used = (provider_name, model)
                         break
                     except ProviderError as exc:
-                        if exc.retryable and attempt == 0 and not text:
-                            await asyncio.sleep(2)
+                        kind = quota.classify_error(provider_name, model, exc)
+                        if attempt == 0 and not text and (kind == "minute" or (exc.retryable and kind is None)):
+                            pause = 20 if kind == "minute" else 2
+                            if kind == "minute":
+                                yield {"type": "notice", "text": f"{model} is busy (per-minute limit); retrying in {pause}s…"}
+                            await asyncio.sleep(pause)
                             continue
                         raise
                 if used:
@@ -173,7 +188,7 @@ async def run(thread_id: str, *, user_text: str | None = None, device_id: str | 
                 last_error = exc
                 if text:  # partial answer already shown: don't restart on another model
                     break
-                yield {"type": "notice", "text": f"{provider_name}/{model} failed: {exc}. Trying the next configured model…"}
+                yield {"type": "notice", "text": f"{provider_name}/{model} failed: {exc}. Trying the next model…"}
         if used is None:
             msg = str(last_error) if last_error else "No LLM is configured."
             yield {"type": "error", "message": f"The assistant couldn't answer: {msg}"}

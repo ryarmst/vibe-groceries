@@ -102,7 +102,11 @@ async def _meal_context(args: dict, ctx: ToolContext):
 
 
 async def _meal_cost(args: dict, ctx: ToolContext):
+    """One recipe (shopping_ingredients) or several at once (recipes: [{name, shopping_ingredients}])."""
     with session_scope() as session:
+        if args.get("recipes"):
+            return {"costs": [{"name": r.get("name"), **planner.cost_manifest(session, r.get("shopping_ingredients") or "")}
+                              for r in args["recipes"][:12]]}
         return planner.cost_manifest(session, args["shopping_ingredients"])
 
 
@@ -124,12 +128,20 @@ def _meal_values(args: dict) -> dict:
 
 
 async def _meal_create(args: dict, ctx: ToolContext):
-    values = _meal_values(args)
-    values["Name"] = args["name"]
-    values.setdefault("Status", "Suggested")
-    values.setdefault("Source", "Weekly Plan" if ctx.proactive else "Chat")
+    """One meal (name, fields, body) or several at once (meals: [{name, fields, body}])."""
+    meals = args.get("meals") or [args]
+    out = []
     async with open_kitchen() as k:
-        return await k.meal_create(values, args.get("body") or "")
+        for m in meals[:10]:
+            try:
+                values = _meal_values(m)
+                values["Name"] = m["name"]
+                values.setdefault("Status", "Suggested")
+                values.setdefault("Source", "Weekly Plan" if ctx.proactive else "Chat")
+                out.append({"name": m["name"], **(await k.meal_create(values, m.get("body") or ""))})
+            except (ValueError, KeyError) as exc:
+                out.append({"name": m.get("name"), "error": str(exc)})
+    return out[0] if len(out) == 1 and not args.get("meals") else {"meals": out}
 
 
 async def _meal_update(args: dict, ctx: ToolContext):
@@ -202,9 +214,12 @@ def register_kitchen_tools() -> None:
     add(Tool("meals_context", "Start here for meal planning: this week's start date, meal-relevant deals (protein, produce…), "
              "on-hand items expiring soon, regular recipes scored against deals and expiring items, and how recent "
              "suggestions turned out (cooked, rated, rejected, skipped).", _obj({"expiring_days": N, "per_group": N}), READ, _meal_context))
-    add(Tool("meal_cost", "Estimate a recipe's cost from the store catalogue, given Shopping Ingredients text "
-             "(`Serves: N` then `Name | quantity` lines). Returns total, per serving, and which ingredients are on sale.",
-             _obj({"shopping_ingredients": S}, ["shopping_ingredients"]), READ, _meal_cost))
+    add(Tool("meal_cost", "Estimate recipe costs from the store catalogue. Pass `recipes` (several at once, preferred) or one "
+             "`shopping_ingredients` text (`Serves: N` then `Name | quantity` lines). Returns total, per serving, and which "
+             "ingredients are on sale.",
+             _obj({"recipes": {"type": "array", "items": {"type": "object", "properties": {"name": S, "shopping_ingredients": S},
+                                                         "required": ["shopping_ingredients"]}},
+                   "shopping_ingredients": S}), READ, _meal_cost))
     add(Tool("get_reference", "Read a reference note: 'shelf-life' (expiry estimates by food and storage) or 'receipts' "
              "(decoding grocery receipt lines).", _obj({"name": S}, ["name"]), READ, _reference))
 
@@ -212,11 +227,13 @@ def register_kitchen_tools() -> None:
                    "Salad, Breakfast…), Cuisine, Main Ingredient, Tags (list: Bulk, Braise, Pressure Cooker, Quick, Sheet Pan, One Pot, "
                    "Freezer-Friendly, New…), Effort (Easy, Moderate or Gourmet), Servings, Uses Up (list of pantry page ids), "
                    "Shopping Ingredients, Based On (list of Cooking page ids), Grocery Run (link)", "properties": {}}
-    add(Tool("meal_suggest", "Create a Suggested Meal in Notion (Status Suggested). Put the recipe in `body` using the "
+    meal_item = {"type": "object", "properties": {"name": S, "fields": meal_fields, "body": S}, "required": ["name", "fields", "body"]}
+    add(Tool("meal_suggest", "Create Suggested Meals in Notion (Status Suggested). Pass `meals` to save several at once "
+             "(preferred: all of the week's meals in one call), or a single name/fields/body. Put the recipe in `body` using the "
              "Cooking page style: a 📌 summary line (why this week: the deals it uses with price and end date, what it uses up, "
              "active/total time, estimated cost per serving), ## Ingredients (imperial and metric), ## Process (numbered, bold "
              "stage labels and times/temps), ## Leftovers & storage, ## Notes.",
-             _obj({"name": S, "fields": meal_fields, "body": S}, ["name", "fields", "body"]), SAFE, _meal_create))
+             _obj({"meals": {"type": "array", "items": meal_item}, "name": S, "fields": meal_fields, "body": S}), SAFE, _meal_create))
     add(Tool("meal_update", "Update the agent-owned fields of a Suggested Meal (not Feedback or Promote).",
              _obj({"page_id": S, "fields": meal_fields}, ["page_id", "fields"]), SAFE, _meal_update))
 

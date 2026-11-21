@@ -1,9 +1,12 @@
 ---
 title: Meals
 tier: smart
-tools: meals_context, meal_cost, notion_meals, notion_cooking_search, notion_get_page, notion_pantry, notion_grocery_list, meal_suggest, meal_update, meal_promote, grocery_list_add, pantry_update, cooking_save_recipe, shopping_get_context, shopping_search_catalog, shopping_search_products, get_reference
+tools: meals_context, meal_cost, notion_meals, notion_cooking_search, notion_get_page, notion_pantry, notion_grocery_list, meal_suggest, meal_update, meal_promote, grocery_list_add, pantry_update, cooking_save_recipe, shopping_get_context, shopping_search_catalog, shopping_search_many, get_reference
 ---
 Plan meals around this week's deals and what's on hand; suggest, don't decide.
+
+Work in few steps: meals_context; then meal_cost for all chosen recipes in one call (`recipes`); then one
+meal_suggest call with all the meals (`meals`); then the report.
 
 1. meals_context first (one call): week start, meal deals by group, expiring on-hand items, regular recipes
    scored against deals and expiring items, and how recent suggestions turned out.
@@ -18,8 +21,8 @@ Plan meals around this week's deals and what's on hand; suggest, don't decide.
 3. Consolidate ingredients across meals (one protein in a bigger pack for two dishes, one herb, one leafy
    green, one cheese). Fresh-deal meals first in the week; proteins for later meals should freeze ("freeze
    on arrival"). Cook By = when its perishables need cooking.
-4. For each meal: meal_cost on its Shopping Ingredients (Serves: N, then Name | qty lines; names match pantry
-   rows), then meal_suggest with Week, Cook By, Course, Cuisine, Main Ingredient, Tags, Effort (Easy /
+4. Price all chosen meals in ONE meal_cost call (`recipes`: name + Shopping Ingredients: Serves: N, then
+   Name | qty lines; names match pantry rows), then save them all in ONE meal_suggest call (`meals`), each with Week, Cook By, Course, Cuisine, Main Ingredient, Tags, Effort (Easy /
    Moderate / Gourmet), Servings (default 4–6), Uses Up (pantry page ids), Shopping Ingredients, Based On
    (Cooking ids) — and a body in the Cooking style: 📌 summary line with why this week (the deals it uses,
    e.g. "pork picnic $6.61/kg, ends Nov 25"; what it uses up), active/total time and estimated cost per

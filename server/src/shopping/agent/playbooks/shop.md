@@ -1,9 +1,15 @@
 ---
 title: Shop
 tier: smart
-tools: shopping_get_context, shopping_search_catalog, shopping_list_aisles, shopping_search_products, shopping_get_product, shopping_get_deals, shopping_get_cart, shopping_auth_status, shopping_create_run, shopping_get_run, shopping_list_runs, shopping_add_selection, shopping_add_choice_group, shopping_update_selection, shopping_submit_run_for_review, shopping_get_preferences, shopping_add_preference_note, shopping_get_product_history, shopping_get_selection_history, shopping_get_feedback, shopping_get_requirement_history, shopping_mark_feedback_reviewed, shopping_get_past_orders, shopping_get_past_order, shopping_add_top_deal, shopping_get_top_deals, shopping_retire_top_deal, shopping_refresh_deals, shopping_apply_approved, notion_pantry, notion_grocery_list, notion_meals, grocery_list_add, grocery_list_set_status, pantry_update, get_reference
+tools: shopping_get_context, shopping_search_catalog, shopping_search_many, shopping_get_product, shopping_get_cart, shopping_auth_status, shopping_stage_items, shopping_get_run, shopping_list_runs, shopping_update_selection, shopping_get_preferences, shopping_add_preference_note, shopping_get_feedback, shopping_get_requirement_history, shopping_mark_feedback_reviewed, shopping_get_past_orders, shopping_get_past_order, shopping_add_top_deal, shopping_get_top_deals, shopping_retire_top_deal, shopping_apply_approved, notion_pantry, notion_grocery_list, notion_meals, grocery_list_add, grocery_list_set_status, pantry_update, get_reference
 ---
 Build a No Frills shopping run for review, and keep buying knowledge current.
+
+Work in about four steps, calling independent tools together in each:
+  step 1 gather: notion_grocery_list + notion_pantry(regular_only) + shopping_get_context + shopping_get_past_orders;
+  step 2 shopping_get_requirement_history for all regulars at once + shopping_search_many for every need at once;
+  step 3 shopping_stage_items with every item (submit: true);
+  step 4 the hand-off message.
 
 1. Gather needs
    - notion_grocery_list: every active row is needed (reason grocery_list). Size to its Quantity in whole
@@ -19,12 +25,13 @@ Build a No Frills shopping run for review, and keep buying knowledge current.
 2. Learn first: shopping_get_context (your items on sale, best deals, recent notes); each item's Shopping
    Preferences (Prefer / Avoid / Size / Buy when / Subs / Note lines) — never stage what an Avoid line
    excludes; shopping_get_preferences (blacklists are absolute); shopping_get_feedback for past removals.
-3. Choose products: shopping_search_products (live) per need; compare unit prices within one family
+3. Choose products: one shopping_search_many with a query per need; compare unit prices within one family
    (per 100 g / 100 mL / item). A SALE tag isn't proof: use our history (lowest seen, 90-day average).
    Staging refuses out-of-stock products: move to the next best and say so.
-4. Build: shopping_create_run, then shopping_add_selection (clear choice) or shopping_add_choice_group (a real
-   trade-off, 2–4 options, recommended first). `requirement` = the exact Notion item name. Reasons + a one-line
-   rationale with numbers. Whole packages only. Then shopping_submit_run_for_review.
+4. Build: ONE shopping_stage_items call with every item (summary like "Weekly groceries — Nov 26", submit: true):
+   a product_id for a clear choice, or `options` (2–4, recommended_index) for a real trade-off. `requirement` = the
+   exact Notion item name. Reasons + a one-line rationale with numbers. Whole packages only. Items it reports as
+   failed (e.g. out of stock): stage the next-best in one more stage_items call (same run_id) or mention them.
 5. Substitutions: off by default. Allow only where a swap is harmless (commodity produce, same-% milk,
    canned staples, generic brands) with a short note for the shopper. Never on deal items, brand- or
    variety-specific picks, meat, pricey items, or anything marked "Subs: never".

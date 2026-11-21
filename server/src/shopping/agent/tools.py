@@ -129,6 +129,7 @@ SHOPPING_TIERS = {
     "shopping_get_run": READ, "shopping_list_runs": READ, "shopping_get_preferences": READ, "shopping_get_product_history": READ,
     "shopping_get_selection_history": READ, "shopping_get_recent_price_history": READ, "shopping_get_feedback": READ,
     "shopping_get_requirement_history": READ, "shopping_get_past_orders": READ, "shopping_get_top_deals": READ,
+    "shopping_search_many": READ, "shopping_stage_items": SAFE,
     # safe (reversible, reviewed by a person before anything is bought)
     "shopping_create_run": SAFE, "shopping_add_selection": SAFE, "shopping_add_choice_group": SAFE,
     "shopping_update_selection": SAFE, "shopping_submit_run_for_review": SAFE, "shopping_add_preference_note": SAFE,

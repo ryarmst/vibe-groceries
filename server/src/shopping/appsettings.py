@@ -30,12 +30,16 @@ PROVIDERS = {
 DEFAULTS: dict[str, dict[str, Any]] = {
     "llm": {
         "tiers": {
-            "fast": {"provider": "gemini", "model": "gemini-flash-latest"},  # alias: follows Google's current Flash
+            # Lite for questions, pantry updates and the deal review; Flash for shopping and meals. Separate free quotas.
+            "fast": {"provider": "gemini", "model": "gemini-flash-lite-latest"},  # aliases follow Google's current models
             "smart": {"provider": "gemini", "model": "gemini-flash-latest"},
         },
         "fallback": [],  # list of {"provider", "model"} tried when the tier's provider fails
         "custom_base_url": "",
-        "max_steps": 12,  # tool calls per turn
+        "max_steps": 12,  # model calls per turn
+        # Free-tier limits per model: requests per minute / per day. Calls are paced to these, and a model that's out
+        # for the day is skipped in favour of the next one. Check AI Studio → Rate limits for your key's numbers.
+        "limits": {"gemini-flash-latest": {"rpm": 5, "rpd": 20}},
         "temperature": 0.4,
         # USD per million tokens (input, output) for cost tracking; free tiers are 0. Edit as prices change.
         "prices": {},
@@ -92,7 +96,7 @@ def get(session: Session, section: str) -> dict:
 
 def _merge(base: dict, extra: dict) -> None:
     for k, v in extra.items():
-        if isinstance(v, dict) and isinstance(base.get(k), dict) and k not in ("prices",):
+        if isinstance(v, dict) and isinstance(base.get(k), dict) and k not in ("prices", "limits"):
             _merge(base[k], v)
         else:
             base[k] = v
@@ -127,6 +131,9 @@ def _validate_llm(v: dict) -> None:
         raise SettingsError("max_steps must be between 1 and 40.")
     if not 0 <= float(v.get("temperature", 0.4)) <= 1.5:
         raise SettingsError("temperature must be between 0 and 1.5.")
+    for model, lim in (v.get("limits") or {}).items():
+        if not isinstance(lim, dict) or any(k not in ("rpm", "rpd") or not isinstance(x, int) or x < 1 for k, x in lim.items()):
+            raise SettingsError(f"Limits for {model} must look like {{\"rpm\": 5, \"rpd\": 20}} (whole numbers ≥ 1).")
     for model, pair in (v.get("prices") or {}).items():
         if not (isinstance(pair, list) and len(pair) == 2 and all(isinstance(x, (int, float)) and x >= 0 for x in pair)):
             raise SettingsError(f"Price for {model} must be [input, output] USD per million tokens.")

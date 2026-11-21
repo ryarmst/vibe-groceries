@@ -162,8 +162,11 @@ async def models(provider_name: str):
 
 @router.get("/llm/usage")
 def usage():
+    from shopping.agent import quota
+
     with session_scope() as session:
-        return {"summary": budget.summary(session), "daily": budget.daily_breakdown(session)}
+        return {"summary": budget.summary(session), "daily": budget.daily_breakdown(session),
+                "models_today": quota.status(session, appsettings.get(session, "llm"))}
 
 
 @router.get("/audit")

@@ -117,24 +117,38 @@ def _parse(text: str) -> list[dict]:
 
 
 async def _ask(system: str, user: str) -> tuple[str, tuple[str, str], Usage]:
+    """One call on the fast tier (a separate free quota from the shopping/meals model), falling back in order."""
+    import asyncio
+
+    from shopping.agent import quota
+    from shopping.agent.loop import _candidates
+
     with session_scope() as session:
         llm = appsettings.get(session, "llm")
         budget.check(session)
-    candidates_ = [llm["tiers"]["smart"]] + list(llm.get("fallback") or [])
     last: Exception | None = None
-    for c in candidates_:
+    for provider_name, model in _candidates(llm, "fast"):
+        with session_scope() as session:
+            ok, reason, wait = quota.check(session, llm, provider_name, model)
+        if not ok:
+            last = ProviderError(reason or "quota")
+            continue
+        if wait > 0:
+            await asyncio.sleep(wait)
         try:
             with session_scope() as session:
-                provider = providers.build(session, context.vault, c["provider"])
+                provider = providers.build(session, context.vault, provider_name)
             text, usage = "", Usage()
+            quota.note_request(provider_name, model)
             async for ev in provider.stream(system=system, messages=[{"role": "user", "content": user}], tools=[],
-                                            model=c["model"], temperature=0.3, max_tokens=8000):  # thinking models spend tokens before answering
+                                            model=model, temperature=0.3, max_tokens=8000):  # thinking models spend tokens first
                 if isinstance(ev, TextDelta):
                     text += ev.text
                 elif isinstance(ev, Usage):
                     usage = ev
-            return text, (c["provider"], c["model"]), usage
+            return text, (provider_name, model), usage
         except ProviderError as exc:
+            quota.classify_error(provider_name, model, exc)
             last = exc
     raise last or ProviderError("No LLM configured.")
 

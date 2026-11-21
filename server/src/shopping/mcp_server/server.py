@@ -271,6 +271,105 @@ class ChoiceOption(BaseModel):
     substitute_product_id: str | None = None
 
 
+COMPACT_KEYS = ("product_id", "name", "brand", "package_size", "sold_by", "price", "regular_price", "discount_pct", "unit_price",
+                "unit_price_basis", "deal", "deal_expiry", "pc_optimum", "availability", "max_quantity", "preferences", "history",
+                "user_feedback")
+COMPACT_HISTORY = ("min_price", "avg_90d", "is_lowest_observed", "vs_avg_90d_pct", "package_size_changed")
+
+
+@mcp.tool()
+@logged
+async def shopping_search_many(
+    queries: Annotated[list[str], Field(min_length=1, max_length=15, description="Several searches at once, e.g. ['2% milk 4L', 'sourdough bread', 'gala apples']")],
+    per_query: Annotated[int, Field(ge=1, le=10, description="Results per search")] = 5,
+    sort_by_unit_price: Annotated[bool, Field(description="Cheapest per 100 g / 100 ml / item first (within the most common size family)")] = True,
+) -> dict:
+    """Search for many needs in ONE call (preferred over repeated shopping_search_products). Compact live results per
+    query, with deals, unit prices, preference flags and our price history. Sponsored and out-of-stock items are left out."""
+    out = {}
+    client = context.client()
+    for q in dict.fromkeys(x.strip() for x in queries if x.strip()):
+        try:
+            products = [p for p in (await client.search_products(q))["products"] if not (p.availability or "").upper().startswith("OUT")]
+        except RetailerError as exc:
+            out[q] = {"error": str(exc)}
+            continue
+        if sort_by_unit_price and products:
+            fams = {}
+            for p in products[:12]:
+                fams[p.comparison_family] = fams.get(p.comparison_family, 0) + 1
+            main = max(fams, key=fams.get)
+            products.sort(key=lambda p: (p.comparison_family != main, p.unit_price is None, p.unit_price or 0))
+        with session_scope() as session:
+            rows = _annotate(session, products[:per_query], "search")
+        compact = []
+        for r in rows:
+            c = {k: r[k] for k in COMPACT_KEYS if k in r}
+            if isinstance(c.get("history"), dict):
+                c["history"] = {k: v for k, v in c["history"].items() if k in COMPACT_HISTORY and v is not None}
+            compact.append(c)
+        out[q] = compact
+    return {"results": out}
+
+
+class StageItem(BaseModel):
+    """One requirement: either a single product (product_id) or a choice between products (options)."""
+    requirement: str = Field(description="Exact Notion item name, e.g. 'Milk'")
+    product_id: str | None = Field(default=None, description="For a single product")
+    quantity: float = Field(1, gt=0)
+    reasons: list[str] = Field(default_factory=list)
+    rationale: str | None = None
+    substitution_allowed: bool = False
+    substitution_note: str | None = None
+    options: list[ChoiceOption] | None = Field(default=None, description="For a real trade-off: 2–4 candidates (instead of product_id)")
+    recommended_index: int = 0
+
+
+@mcp.tool()
+@logged
+async def shopping_stage_items(
+    items: Annotated[list[StageItem], Field(min_length=1, max_length=40)],
+    run_id: Annotated[str | None, Field(description="Existing run; leave empty to create one with `summary`")] = None,
+    summary: Annotated[str | None, Field(description="Title for a new run, e.g. 'Weekly groceries — Nov 26'")] = None,
+    notes: str | None = None,
+    submit: Annotated[bool, Field(description="Also submit the run for review (do this on your last batch)")] = False,
+) -> dict:
+    """Stage MANY items in one call (preferred over repeated shopping_add_selection / shopping_add_choice_group):
+    creates the run if needed, adds each single product or choice group, and optionally submits for review.
+    Failures (e.g. out of stock) are reported per item; the rest still go in."""
+    client = context.client()
+    with session_scope() as session:
+        if not run_id:
+            run_id = service.create_run(session, summary=summary or "Shopping run", store_id=settings.store_id, notes=notes).id
+    results = []
+    for it in items:
+        try:
+            with session_scope() as session:
+                if it.options:
+                    opts = [o.model_dump() for o in it.options]
+                    group = await service.add_choice_group(session, client, run_id, label=it.requirement, options=opts,
+                                                           recommended_index=min(it.recommended_index, len(opts) - 1))
+                    for sel in group.selections:
+                        sel.requirement = it.requirement
+                    results.append({"requirement": it.requirement, "ok": True, "choice_group_id": group.id, "options": len(opts)})
+                elif it.product_id:
+                    sel = await service.add_selection(session, client, run_id, product_id=it.product_id, quantity=it.quantity,
+                                                      reasons=it.reasons, rationale=it.rationale, requirement=it.requirement,
+                                                      substitution_allowed=it.substitution_allowed, substitution_note=it.substitution_note)
+                    results.append({"requirement": it.requirement, "ok": True, "selection_id": sel.id,
+                                    "price": service.selection_dict(session, sel).get("observed_price")})
+                else:
+                    results.append({"requirement": it.requirement, "ok": False, "error": "Give product_id or options."})
+        except (service.ShoppingError, RetailerError) as exc:
+            results.append({"requirement": it.requirement, "ok": False, "error": str(exc)})
+    with session_scope() as session:
+        run = service.get_run(session, run_id)
+        if submit:
+            service.submit_run_for_review(session, run_id)
+        return {"run_id": run_id, "review_url": _review_url(run_id), "status": run.status, "staged": sum(r["ok"] for r in results),
+                "failed": [r for r in results if not r["ok"]], "estimated_total": float(service.estimated_total(run))}
+
+
 @mcp.tool()
 @logged
 async def shopping_add_choice_group(

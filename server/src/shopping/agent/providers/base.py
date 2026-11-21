@@ -43,9 +43,9 @@ class ToolSpec:
 
 
 class ProviderError(Exception):
-    def __init__(self, message: str, *, retryable: bool = False, status: int | None = None):
+    def __init__(self, message: str, *, retryable: bool = False, status: int | None = None, body: str = ""):
         super().__init__(message)
-        self.retryable, self.status = retryable, status
+        self.retryable, self.status, self.body = retryable, status, body
 
 
 class Provider(Protocol):
@@ -60,9 +60,9 @@ class Provider(Protocol):
 def error_from_status(status: int, body: str, provider: str) -> ProviderError:
     snippet = body.strip().replace("\n", " ")[:300]
     if status in (401, 403):
-        return ProviderError(f"{provider} rejected the API key ({status}). Check it in Settings.", status=status)
+        return ProviderError(f"{provider} rejected the API key ({status}). Check it in Settings.", status=status, body=body)
     if status == 429:
-        return ProviderError(f"{provider} rate limit or quota reached (429): {snippet}", retryable=True, status=status)
+        return ProviderError(f"{provider} rate limit or quota reached (429): {snippet}", retryable=True, status=status, body=body)
     if status >= 500:
-        return ProviderError(f"{provider} is having trouble ({status}).", retryable=True, status=status)
-    return ProviderError(f"{provider} refused the request ({status}): {snippet}", status=status)
+        return ProviderError(f"{provider} is having trouble ({status}).", retryable=True, status=status, body=body)
+    return ProviderError(f"{provider} refused the request ({status}): {snippet}", status=status, body=body)

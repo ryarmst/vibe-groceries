@@ -97,8 +97,8 @@ class OpenAICompatible:
             body["tools"] = [{"type": "function", "function": {
                 "name": t.name, "description": t.description[:1024],
                 "parameters": simplify_schema(t.parameters) if self._strict else t.parameters}} for t in tools]
-        if self.name in ("openai", "openrouter"):
-            body["stream_options"] = {"include_usage": True}
+        if self.name in ("openai", "openrouter", "gemini", "groq", "mistral"):
+            body["stream_options"] = {"include_usage": True}  # token counts on streamed replies (budget and limits)
         calls: dict[int, dict] = {}
         usage = Usage()
         stop = "stop"

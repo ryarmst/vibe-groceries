@@ -15,11 +15,13 @@ from shopping.models import AgentAudit, ChatMessage, ChatThread, LLMUsage
 class FakeProvider:
     """Plays back scripted turns; records what it was sent."""
 
-    def __init__(self, turns, name="gemini", fail_first: ProviderError | None = None):
-        self.turns, self.name, self.sent, self.fail_first = list(turns), name, [], fail_first
+    def __init__(self, turns, name="gemini", fail_first: ProviderError | None = None, fail_always: ProviderError | None = None):
+        self.turns, self.name, self.sent, self.fail_first, self.fail_always = list(turns), name, [], fail_first, fail_always
 
     async def stream(self, *, system, messages, tools, model, temperature, max_tokens):
         self.sent.append({"system": system, "messages": messages, "tools": [t.name for t in tools]})
+        if self.fail_always:
+            raise self.fail_always
         if self.fail_first:
             err, self.fail_first = self.fail_first, None
             raise err
@@ -138,7 +140,8 @@ async def test_tool_outside_playbook_is_refused(monkeypatch, tools):
 async def test_fallback_to_next_provider(monkeypatch, tools):
     with session_scope() as s:
         appsettings.update(s, "llm", {"fallback": [{"provider": "groq", "model": "llama"}]})
-    broken = FakeProvider([], name="gemini", fail_first=ProviderError("quota", retryable=False, status=429))
+    daily = ProviderError("quota", retryable=True, status=429, body='{"error": {"details": [{"quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}')
+    broken = FakeProvider([], name="gemini", fail_always=daily)  # both Gemini models are out for the day
     backup = FakeProvider([[TextDelta("From the backup.")]], name="groq")
     use(monkeypatch, broken, backup)
     evs = await collect(loop.run(new_thread(), user_text="hello", mode="ask"))
@@ -172,3 +175,59 @@ def test_router():
     assert route("do a grocery shop for me") == "shop"
     assert route("is $4.99 good for 18 eggs?") == "ask"
     assert route("yes, go ahead", previous="shop") == "shop"
+
+
+
+@pytest.fixture
+def clean_quota():
+    from shopping.agent import quota
+
+    quota.reset()
+    yield quota
+    quota.reset()
+
+
+def test_quota_rules(clean_quota):
+    from shopping.agent.providers.base import ProviderError as PE
+
+    quota = clean_quota
+    llm = {"limits": {"m-flash": {"rpm": 2, "rpd": 3}}, "tiers": {"fast": {"provider": "gemini", "model": "m-lite"},
+                                                                  "smart": {"provider": "gemini", "model": "m-flash"}}}
+    with session_scope() as s:
+        assert quota.check(s, llm, "gemini", "m-flash") == (True, None, 0.0)
+        quota.note_request("gemini", "m-flash")
+        quota.note_request("gemini", "m-flash")
+        ok, _, wait = quota.check(s, llm, "gemini", "m-flash")
+        assert ok and 55 < wait <= 60.5  # third call in a minute waits for the window
+        for _ in range(3):
+            s.add(LLMUsage(provider="gemini", model="m-flash", tokens_in=1, tokens_out=1, cost_usd=0))
+        s.flush()
+        ok, reason, _ = quota.check(s, llm, "gemini", "m-flash")
+        assert not ok and "3 requests" in reason
+        assert quota.check(s, llm, "gemini", "m-lite")[0]  # no limits configured: always usable
+        assert quota.classify_error("gemini", "m-lite", PE("x", status=429, body="Requests per minute exceeded")) == "minute"
+        assert quota.classify_error("gemini", "m-lite", PE("x", status=429, body="GenerateRequestsPerDayPerProjectPerModel")) == "daily"
+        assert not quota.check(s, llm, "gemini", "m-lite")[0]
+        assert {r["model"]: r["exhausted"] for r in quota.status(s, llm)} == {"m-flash": True, "m-lite": True}
+        s.query(LLMUsage).filter_by(model="m-flash").delete()
+
+
+async def test_exhausted_model_is_skipped_for_the_other_tier(monkeypatch, tools, clean_quota):
+    with session_scope() as s:
+        appsettings.update(s, "llm", {"limits": {"gemini-flash-lite-latest": {"rpm": 5, "rpd": 1}}})
+        s.add(LLMUsage(provider="gemini", model="gemini-flash-lite-latest", tokens_in=1, tokens_out=1, cost_usd=0))
+    seen = []
+
+    class Recorder(FakeProvider):
+        async def stream(self, *, model, **kw):
+            seen.append(model)
+            async for ev in super().stream(model=model, **kw):
+                yield ev
+
+    use(monkeypatch, Recorder([[TextDelta("Hi from Flash.")]]))
+    evs = await collect(loop.run(new_thread(), user_text="hello", mode="ask"))  # Ask uses the fast tier (Lite)
+    assert seen == ["gemini-flash-latest"]
+    assert any(e["type"] == "notice" and "requests for today" in e["text"] for e in evs)
+    with session_scope() as s:
+        appsettings.update(s, "llm", {"limits": {"gemini-flash-latest": {"rpm": 5, "rpd": 20}}})
+        s.query(LLMUsage).filter_by(model="gemini-flash-lite-latest").delete()

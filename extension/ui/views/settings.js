@@ -14,7 +14,7 @@ export async function render(el) {
   if (!cfg.serverUrl) return;
   const [all, secrets, devices, usage] = await Promise.all([get("/api/settings"), get("/api/settings/secrets"),
     get("/api/devices"), get("/api/llm/usage")]);
-  el.append(await nofrillsCard(), budgetCard(all.budget, usage.summary), llmCard(all.llm, all.providers), keysCard(secrets.secrets),
+  el.append(await nofrillsCard(), budgetCard(all.budget, usage.summary, usage.models_today || []), llmCard(all.llm, all.providers), keysCard(secrets.secrets),
     notionCard(all.notion), jobsCard(all.jobs), devicesCard(devices));
 }
 
@@ -74,7 +74,7 @@ async function nofrillsCard() {
     } }, "Send session now"));
 }
 
-function budgetCard(b, s) {
+function budgetCard(b, s, models) {
   const cap = h("input", { type: "number", min: 0, max: 1000, step: 1, value: b.monthly_usd, style: { width: "7em" } });
   const warn = h("input", { type: "number", min: 1, max: 100, value: b.warn_at_pct, style: { width: "5em" } });
   const daily = h("input", { type: "number", min: 1, max: 10000, value: b.daily_requests, style: { width: "6em" } });
@@ -83,6 +83,10 @@ function budgetCard(b, s) {
     h("p", {}, `This month: ${money(s.month_spent_usd)} of ${money(s.monthly_cap_usd)} (${s.pct}%) · ${s.requests_today} requests today. `,
       s.warn ? h("strong", { class: "warn" }, "Near the cap.") : null),
     h("p", { class: "small muted" }, "Gemini's free tier counts as $0. Paid models without a price in LLM settings are counted at a deliberately high estimate."),
+    models.length ? h("table", { class: "table small" }, h("tbody", {}, ...models.map((m) => h("tr", {},
+      h("td", {}, `${m.provider} · ${m.model}`),
+      h("td", {}, m.rpd ? `${m.used_today} of ${m.rpd} requests today` : `${m.used_today} requests today`, m.rpm ? ` · ${m.rpm}/min` : ""),
+      h("td", {}, m.exhausted ? h("span", { class: "badge bad" }, "out for today") : null))))) : null,
     h("div", { class: "row" }, h("span", { class: "small" }, "Quick set:"),
       ...[5, 10, 25, 50].map((v) => h("button", { onclick: () => save({ monthly_usd: v }) }, `$${v}`))),
     h("div", { class: "form-grid", style: { marginTop: "8px" } }, field("Monthly cap ($)", cap), field("Warn at (%)", warn), field("Requests per day", daily)),
@@ -116,6 +120,8 @@ function llmCard(llm, providers) {
   const custom = h("input", { type: "url", value: llm.custom_base_url || "", placeholder: "http://localhost:11434/v1" });
   const temp = h("input", { type: "number", step: 0.1, min: 0, max: 1.5, value: llm.temperature, style: { width: "5em" } });
   const steps = h("input", { type: "number", min: 1, max: 40, value: llm.max_steps, style: { width: "5em" } });
+  const limits = h("textarea", { rows: 2, placeholder: "gemini-flash-latest: 5, 20" },
+    Object.entries(llm.limits || {}).map(([m, l]) => `${m}: ${l.rpm ?? ""}, ${l.rpd ?? ""}`).join("\n"));
   const prices = h("textarea", { rows: 2, placeholder: "claude-sonnet-4-5: 3, 15" },
     Object.entries(llm.prices || {}).map(([m, [i, o]]) => `${m}: ${i}, ${o}`).join("\n"));
   const parseLines = (text, fn) => text.value.split("\n").map((l) => l.trim()).filter(Boolean).map(fn);
@@ -125,6 +131,7 @@ function llmCard(llm, providers) {
       field("Fallbacks (provider: model per line)", fallback, "Tried in order when the main model fails."),
       field("Custom endpoint base URL", custom, "For the Custom provider, e.g. a local Ollama."),
       field("Prices (model: input, output $/M tokens)", prices, "For budget tracking of paid models."),
+      field("Free-tier limits (model: per minute, per day)", limits, "Calls are paced to these; a model out for the day is skipped. See AI Studio → Rate limits."),
       field("Temperature", temp), field("Max tool steps per reply", steps)),
     h("div", { class: "row", style: { marginTop: "8px" } }, h("button", { class: "primary", onclick: (e) => busy(e.target, async () => {
       await put("/api/settings/llm", {
@@ -132,6 +139,10 @@ function llmCard(llm, providers) {
         fallback: parseLines(fallback, (l) => { const [p, ...m] = l.split(":"); return { provider: p.trim(), model: m.join(":").trim() }; }),
         custom_base_url: custom.value.trim(), temperature: Number(temp.value), max_steps: Number(steps.value),
         prices: Object.fromEntries(parseLines(prices, (l) => { const [m, rest] = l.split(/:(?=[^:]*$)/); return [m.trim(), rest.split(",").map(Number)]; })),
+        limits: Object.fromEntries(parseLines(limits, (l) => {
+          const [m, rest] = l.split(/:(?=[^:]*$)/); const [rpm, rpd] = rest.split(",").map((x) => parseInt(x, 10));
+          return [m.trim(), Object.fromEntries([["rpm", rpm], ["rpd", rpd]].filter(([, v]) => v > 0))];
+        })),
       });
       toast("LLM settings saved.");
     }) }, "Save LLM settings")));

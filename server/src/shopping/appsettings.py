@@ -30,8 +30,8 @@ PROVIDERS = {
 DEFAULTS: dict[str, dict[str, Any]] = {
     "llm": {
         "tiers": {
-            "fast": {"provider": "gemini", "model": "gemini-2.5-flash"},
-            "smart": {"provider": "gemini", "model": "gemini-2.5-flash"},
+            "fast": {"provider": "gemini", "model": "gemini-flash-latest"},  # alias: follows Google's current Flash
+            "smart": {"provider": "gemini", "model": "gemini-flash-latest"},
         },
         "fallback": [],  # list of {"provider", "model"} tried when the tier's provider fails
         "custom_base_url": "",

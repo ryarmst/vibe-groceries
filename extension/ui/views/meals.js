@@ -28,7 +28,7 @@ function mealCard(m) {
     m["Main Ingredient"], m.Course].filter(Boolean);
   box.append(h("div", { class: "small muted" }, facts.join(" · ")));
   box.append(h("div", { style: { marginTop: "4px" } }, ...(m.Tags || []).map((t) => badge(t, t === "New" ? "warn" : "")),
-    m.Cuisine ? badge(m.Cuisine) : null));
+    ...[].concat(m.Cuisine || []).map((c) => badge(c))));
   if (m.Feedback) box.append(h("p", { class: "small", style: { whiteSpace: "pre-wrap" } }, "✎ ", m.Feedback));
 
   const note = h("input", { placeholder: "Note (optional): how it went, what to change, why not…", style: { flex: 1, minWidth: "220px" } });

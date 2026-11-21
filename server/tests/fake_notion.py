@@ -25,6 +25,7 @@ SCHEMAS = {
               "Shopping Ingredients": {"type": "rich_text"}},
     MEALS: {"Name": {"type": "title"}, "Status": {"type": "status", "status": _opts("Suggested", "Planned", "Cooked", "Promoted", "Rejected", "Skipped")},
             "Week": {"type": "date"}, "Cook By": {"type": "date"}, "Course": {"type": "select"}, "Tags": {"type": "multi_select"},
+            "Cuisine": {"type": "multi_select"},
             "Shopping Ingredients": {"type": "rich_text"}, "Effort": {"type": "select"}, "Feedback": {"type": "rich_text"},
             "Promote": {"type": "checkbox"}, "Promoted To": {"type": "relation", "relation": {"data_source_id": COOKING}},
             "Based On": {"type": "relation", "relation": {"data_source_id": COOKING}}},
@@ -36,6 +37,7 @@ class FakeNotion:
         self.pages: dict[str, dict] = {}
         self.blocks: dict[str, list] = {}
         self.calls = []
+        self.databases: dict[str, str] = {}  # database id -> data source id
 
     def add(self, ds: str, values: dict, body: list | None = None) -> str:
         pid = str(uuid.uuid4())
@@ -83,7 +85,14 @@ class FakeNotion:
         self.calls.append((method, path, body))
         parts = path.strip("/").split("/")
         if parts[0] == "data_sources" and method == "GET":
+            if parts[1] not in SCHEMAS:
+                return httpx.Response(404, json={"message": f"Could not find data_source with ID: {parts[1]}"})
             return httpx.Response(200, json={"properties": SCHEMAS[parts[1]]})
+        if parts[0] == "databases" and method == "GET":
+            ds = self.databases.get(parts[1])
+            if ds is None:
+                return httpx.Response(404, json={"message": "no database"})
+            return httpx.Response(200, json={"id": parts[1], "data_sources": [{"id": ds, "name": "x"}]})
         if parts[0] == "data_sources" and parts[-1] == "query":
             rows = [p for p in self.pages.values() if p["ds"] == parts[1] and self._match(p, body.get("filter"))]
             return httpx.Response(200, json={"results": rows, "has_more": False})

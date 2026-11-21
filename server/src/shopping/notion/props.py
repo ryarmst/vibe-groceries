@@ -61,6 +61,8 @@ def write(schema: dict, values: dict) -> tuple[dict, list[str]]:
             skipped.append(name)
             continue
         t = prop.get("type")
+        if isinstance(value, list) and t in ("title", "rich_text", "select", "status"):
+            value = ", ".join(str(v) for v in value)  # e.g. a multi-select Cuisine copied into Cooking's text Cuisine
         if t == "title":
             payload[name] = {"title": _rich(str(value or ""))}
         elif t == "rich_text":

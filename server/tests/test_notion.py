@@ -68,11 +68,13 @@ async def test_promote_meal_copies_to_cooking(notion):
     fake, k = notion
     body = text_to_blocks("📌 Weeknight braise\n## Ingredients\n- pork")
     meal = fake.add(MEALS, {"Name": T("Carnitas"), "Status": {"name": "Cooked"}, "Tags": [{"name": "Braise"}], "Effort": {"name": "Easy"},
+                            "Cuisine": [{"name": "Mexican"}],
                             "Shopping Ingredients": T("Serves: 6\nPork Shoulder | 3 lb")}, body)
     out = await k.promote_meal(meal)
     page = fake.pages[out["cooking_page"]]
     assert page["ds"] == COOKING and page["properties"]["Tags"]["multi_select"] == [{"name": "Braise"}]
     assert page["properties"]["Effort"]["select"] == {"name": "Easy"}
+    assert page["properties"]["Cuisine"]["rich_text"][0]["text"]["content"] == "Mexican"  # multi-select → Cooking's text
     assert fake.blocks[out["cooking_page"]][0]["type"] == "callout"
     props = fake.pages[meal]["properties"]
     assert props["Status"]["status"]["name"] == "Promoted" and props["Promoted To"]["relation"] == [{"id": out["cooking_page"]}]
@@ -85,3 +87,13 @@ async def test_unconfigured_meals_database(notion):
     k.ids["meals"] = ""
     with pytest.raises(Exception, match="Suggested Meals database isn't configured"):
         await k.meals()
+
+
+async def test_database_id_resolves_to_its_data_source(notion):
+    fake, k = notion
+    database_id = "41f2d1e0-e400-80cb-929e-df6ba145a2c4"
+    fake.databases[database_id] = MEALS
+    k.ids["meals"] = database_id  # what "Copy link" gives
+    created = await k.meal_create({"Name": "Dal", "Status": "Suggested", "Cuisine": ["Indian", "Nepali"]}, "📌 x")
+    assert fake.pages[created["created"]]["ds"] == MEALS
+    assert k.ids["meals"] == MEALS and len(await k.meals()) == 1

@@ -84,6 +84,9 @@ class NotionClient:
     async def get_data_source(self, ds_id: str) -> dict:
         return await self._request("GET", f"/data_sources/{clean_id(ds_id)}")
 
+    async def get_database(self, db_id: str) -> dict:
+        return await self._request("GET", f"/databases/{clean_id(db_id)}")
+
     async def query(self, ds_id: str, *, filter: dict | None = None, sorts: list | None = None, limit: int = 500) -> list[dict]:
         out, cursor = [], None
         while len(out) < limit:

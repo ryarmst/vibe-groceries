@@ -26,6 +26,7 @@ SCHEMA_TTL = 600
 ROWS_TTL = 120
 _schema_cache: dict[str, tuple[float, dict]] = {}
 _rows_cache: dict[str, tuple[float, list]] = {}
+_resolved: dict[str, str] = {}  # configured id → data source id
 
 PANTRY_FIELDS = ("Name", "Type", "Location", "Sub-Location", "Replace?", "Regular Purchase?", "Shopping Preferences",
                  "Store Preference", "Expiration")
@@ -63,8 +64,31 @@ class Kitchen:
             raise NotionError(f"The {label} database isn't configured. Add its data source id in Settings → Notion.")
         return ds
 
-    async def schema(self, which: str) -> dict:
+    async def _resolve(self, which: str) -> str:
+        """Settings may hold a database id (what "Copy link" gives) instead of its data source id; look it up once."""
         ds = self._ds(which)
+        if ds in _resolved:
+            self.ids[which] = _resolved[ds]
+            return _resolved[ds]
+        try:
+            await self.n.get_data_source(ds)
+            _resolved[ds] = ds
+        except NotionError as exc:
+            if exc.status != 404:
+                raise
+            try:
+                db = await self.n.get_database(ds)
+            except NotionError:
+                raise exc from None
+            sources = db.get("data_sources") or []
+            if not sources:
+                raise exc
+            _resolved[ds] = clean_id(sources[0]["id"])
+        self.ids[which] = _resolved[ds]
+        return _resolved[ds]
+
+    async def schema(self, which: str) -> dict:
+        ds = await self._resolve(which)
         hit = _schema_cache.get(ds)
         if hit and time.time() - hit[0] < SCHEMA_TTL:
             return hit[1]
@@ -74,7 +98,7 @@ class Kitchen:
         return schema
 
     async def rows(self, which: str, *, filter: dict | None = None, sorts: list | None = None, cache: bool = True, limit: int = 500) -> list[dict]:
-        ds = self._ds(which)
+        ds = await self._resolve(which)
         key = ds if filter is None and sorts is None else None
         if cache and key:
             hit = _rows_cache.get(key)

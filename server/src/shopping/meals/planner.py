@@ -101,11 +101,11 @@ async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int =
                 on_sale.append({"ingredient": it["name"], "product": p["name"], "price": p["price"],
                                 "discount_pct": p["discount_pct"], "ends": p.get("deal_ends")})
         last = recent.get(norm(r.get("Name") or ""))
-        cooked_recently = bool(last and last.get("Status") == "Cooked" and (last.get("Cooked On") or "") >= cutoff)
+        cooked_recently = bool(last and last.get("Status") in ("Cooked", "Promoted") and (last.get("Week") or "") >= cutoff)
         rejected = bool(last and last.get("Status") == "Rejected")
         score = 10 * len(uses_up) + 4 * len(on_sale) - (15 if cooked_recently else 0) - (20 if rejected else 0)
-        if last and last.get("Rating"):
-            score += 2 * str(last["Rating"]).count("★")
+        if last and last.get("Status") == "Promoted":
+            score += 5  # a keeper
         out.append({"cooking_id": r["id"], "name": r.get("Name"), "tags": r.get("Tags"), "main_ingredient": r.get("Main Ingredient"),
                     "serves": serves, "has_manifest": bool(items), "uses_up": uses_up, "ingredients_on_sale": on_sale,
                     "cooked_recently": cooked_recently, "previously_rejected": rejected,
@@ -120,7 +120,7 @@ def recent_meal_history(meals: list[dict], *, weeks: int = 6) -> dict:
     """Outcomes of recent suggestions: what got cooked, rated, rejected or skipped, in people's words."""
     cutoff = (date.today() - timedelta(weeks=weeks)).isoformat()
     recent = [m for m in meals if (m.get("Week") or m.get("Cook By") or "") >= cutoff]
-    pick = lambda status: [{k: m.get(k) for k in ("Name", "Rating", "Leftovers", "Feedback", "Novelty", "Active Time") if m.get(k)}  # noqa: E731
+    pick = lambda status: [{k: m.get(k) for k in ("Name", "Feedback", "Effort", "Tags", "Week") if m.get(k)}  # noqa: E731
                            for m in recent if m.get("Status") == status]
     return {"cooked": pick("Cooked") + pick("Promoted"), "rejected": pick("Rejected"), "skipped": pick("Skipped"),
             "planned_now": pick("Planned"), "suggested_now": pick("Suggested")}

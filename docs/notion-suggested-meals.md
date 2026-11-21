@@ -12,38 +12,29 @@ to plan better next time.
 
 ## Properties
 
+Simplified (2026-11-21): details like the deals used, active/total time and cost per serving live in the page's
+📌 summary line instead of separate fields; how it went goes in Feedback. Import steps: [notion/README.md](notion/README.md).
+
 | Property | Type | Written by | Purpose |
 |---|---|---|---|
-| `Name` | title | agent | Dish name, Cooking style (no type prefix) |
-| `Status` | status | both | Lifecycle (below) |
+| `Name` | title | agent | Dish name, Cooking style |
+| `Status` | status | both | Suggested → Planned → Cooked / Promoted; or Rejected / Skipped |
 | `Week` | date | agent | Plan week start (Thursday, flyer day) |
-| `Cook By` | date | agent | Latest good day to cook: earliest of key perishable expiry and freshness. Orders the week |
-| `Course` | select | agent | Same options as Cooking (e.g. Main, Side, Soup, Salad, Breakfast…) |
-| `Cuisine` | text | agent | Comma-separated, as in Cooking |
-| `Main Ingredient` | text | agent | Single value, as in Cooking (e.g. "Pork Shoulder") |
-| `Tags` | multi-select | agent | Cooking's vocabulary (Bulk, Braise, Pressure Cooker, Sous Vide…) **plus** Quick, Sheet Pan, One Pot, Freezer-Friendly, New |
-| `Novelty` | select | agent | Regular · Twist (variation on a known dish) · New. Drives the "mostly proven, some new" balance |
-| `Servings` | number | agent | Default 4–6; Bulk meals more |
-| `Active Time` | number (min) | agent | Hands-on minutes: the effort signal |
-| `Total Time` | number (min) | agent | Including braise or rest time |
-| `Est. Cost` | number ($) | agent | Priced from the catalogue at plan time |
-| `Cost / Serving` | formula | — | `Est. Cost / Servings` |
-| `Deals` | text | agent | e.g. "Pork picnic $6.61/kg (ends Nov 25); Sweet potato 45% off" |
-| `Uses Up` | relation → Pantry | agent | On-hand items (especially near `Expiration`) this meal consumes: the waste signal |
-| `Shopping Ingredients` | text | agent | Same manifest format as Cooking (`Serves: 6` then `Name \| qty[\| optional]`); copied on promotion |
-| `Based On` | relation → Cooking | agent | When it's a regular or a twist on an existing recipe |
-| `Grocery Run` | url | agent | Link to the run that bought its ingredients |
+| `Cook By` | date | agent | Latest good day to cook (perishables); orders the week |
+| `Course` | select | agent | Same options as Cooking |
+| `Cuisine` | text | agent | As in Cooking |
+| `Main Ingredient` | text | agent | As in Cooking |
+| `Tags` | multi-select | agent | Cooking's tags plus Quick, Sheet Pan, One Pot, Freezer-Friendly, New |
+| `Effort` | select | agent | Easy · Moderate · Gourmet (as in Cooking) |
+| `Servings` | number | agent | Default 4–6 |
+| `Uses Up` | relation → Pantry | agent | On-hand items it uses before they expire |
+| `Shopping Ingredients` | text | agent | Cooking's manifest format; copied on promotion |
+| `Based On` | relation → Cooking | agent | A regular or the recipe it's a twist on |
+| `Grocery Run` | url | agent | The run that bought its ingredients |
 | `Source` | select | agent | Weekly Plan · Chat · Human |
-| `Cooked On` | date | human (or check-in) | Set when cooked |
-| `Rating` | select | human | ★ to ★★★★★ |
-| `Leftovers` | select | human | None · Some (planned) · Too much · Not enough: portion learning |
-| `Feedback` | text | human | In your own words: why rejected, what to change ("less salt", "kids loved it", "too fiddly for a weeknight") |
-| `Promote` | checkbox | human | "Save this to Cooking" request; the agent processes it |
+| `Feedback` | text | people | In your own words, with who and when |
+| `Promote` | checkbox | people | "Save this to Cooking" |
 | `Promoted To` | relation → Cooking | agent | Set after promotion |
-| `Suggested By` | created by / text | — | Which device or person (if you want attribution) |
-
-**Optional, on Groceries** (one new relation, so a rejected meal's unique ingredients can be skipped
-before they're bought): `For Meals` (relation → Suggested Meals, two-way).
 
 ## Status lifecycle
 
@@ -81,17 +72,15 @@ Notion status groups:
 - **Calendar**: by Cook By.
 - **To Promote**: Promote = ✓ and Promoted To is empty.
 - **Learning**: Rejected and Skipped with Feedback, newest first.
-- **Hall of Fame**: Rating ≥ ★★★★, not yet promoted.
 
 ## How the agent uses it
 - **Planning:**
-  - Avoid repeating anything cooked in the last ~3 weeks unless it was rated ★★★★+.
+  - Avoid repeating anything cooked in the last ~3 weeks unless it was promoted.
   - Avoid anything rejected with negative Feedback.
-  - Keep the Novelty mix at about 70% Regular or Twist and about 30% New.
+  - Mostly proven dishes, about one new one a week (tagged New).
   - Every Planned meal must have a Cook By and every perishable it buys must belong to a meal.
 - **Learning signals:**
-  - Ratings and Feedback adjust cuisine, protein and effort preferences.
-  - Leftovers adjust servings.
+  - Feedback (and Rejected/Promoted) adjusts cuisine, protein, effort and portion preferences.
   - Skipped meals reduce effort and the meal count for the following week.
 - **Waste:** "Uses Up" is filled from pantry rows whose `Expiration` falls within the week. Meals with
   Uses Up are scheduled first.

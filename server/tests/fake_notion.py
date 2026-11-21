@@ -20,13 +20,14 @@ SCHEMAS = {
     GROCERIES: {"Name": {"type": "title"}, "Quantity": {"type": "rich_text"}, "Status": {"type": "status", "status": _opts("New", "Skipped", "Purchased")},
                 "Purchase Date": {"type": "date"}, "🥕 Kitchen Pantry and Storage": {"type": "relation", "relation": {"data_source_id": PANTRY}}},
     COOKING: {"Name": {"type": "title"}, "Type": {"type": "select"}, "Course": {"type": "select"}, "Cuisine": {"type": "rich_text"},
+              "Effort": {"type": "select"},
               "Main Ingredient": {"type": "rich_text"}, "Tags": {"type": "multi_select"}, "Regular Recipe?": {"type": "checkbox"},
               "Shopping Ingredients": {"type": "rich_text"}},
     MEALS: {"Name": {"type": "title"}, "Status": {"type": "status", "status": _opts("Suggested", "Planned", "Cooked", "Promoted", "Rejected", "Skipped")},
             "Week": {"type": "date"}, "Cook By": {"type": "date"}, "Course": {"type": "select"}, "Tags": {"type": "multi_select"},
-            "Shopping Ingredients": {"type": "rich_text"}, "Rating": {"type": "select"}, "Feedback": {"type": "rich_text"},
+            "Shopping Ingredients": {"type": "rich_text"}, "Effort": {"type": "select"}, "Feedback": {"type": "rich_text"},
             "Promote": {"type": "checkbox"}, "Promoted To": {"type": "relation", "relation": {"data_source_id": COOKING}},
-            "Based On": {"type": "relation", "relation": {"data_source_id": COOKING}}, "Cooked On": {"type": "date"}},
+            "Based On": {"type": "relation", "relation": {"data_source_id": COOKING}}},
 }
 
 

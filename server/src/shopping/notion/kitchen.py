@@ -31,10 +31,9 @@ PANTRY_FIELDS = ("Name", "Type", "Location", "Sub-Location", "Replace?", "Regula
                  "Store Preference", "Expiration")
 PANTRY_WRITABLE = {"Type", "Location", "Sub-Location", "Replace?", "Regular Purchase?", "Shopping Preferences",
                    "Store Preference", "Expiration"}
-MEAL_FIELDS = ("Name", "Status", "Week", "Cook By", "Course", "Cuisine", "Main Ingredient", "Tags", "Novelty", "Servings",
-               "Active Time", "Total Time", "Est. Cost", "Cost / Serving", "Deals", "Uses Up", "Shopping Ingredients",
-               "Based On", "Grocery Run", "Source", "Cooked On", "Rating", "Leftovers", "Feedback", "Promote", "Promoted To")
-COOKING_COPY = ("Course", "Cuisine", "Main Ingredient", "Tags", "Shopping Ingredients")
+MEAL_FIELDS = ("Name", "Status", "Week", "Cook By", "Course", "Cuisine", "Main Ingredient", "Tags", "Effort", "Servings",
+               "Uses Up", "Shopping Ingredients", "Based On", "Grocery Run", "Source", "Feedback", "Promote", "Promoted To")
+COOKING_COPY = ("Course", "Cuisine", "Main Ingredient", "Tags", "Effort", "Shopping Ingredients")
 
 
 def norm(name: str) -> str:

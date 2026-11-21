@@ -17,10 +17,9 @@ from shopping.notion.kitchen import open_kitchen
 
 REFERENCES = Path(__file__).parent / "references"
 
-# Fields the agent may set on a Suggested Meal. Rating / Leftovers / Feedback / Cooked On / Promote are people's.
-MEAL_AGENT_FIELDS = {"Name", "Status", "Week", "Cook By", "Course", "Cuisine", "Main Ingredient", "Tags", "Novelty", "Servings",
-                     "Active Time", "Total Time", "Est. Cost", "Deals", "Uses Up", "Shopping Ingredients", "Based On",
-                     "Grocery Run", "Source"}
+# Fields the agent may set on a Suggested Meal. Feedback and Promote are people's.
+MEAL_AGENT_FIELDS = {"Name", "Status", "Week", "Cook By", "Course", "Cuisine", "Main Ingredient", "Tags", "Effort", "Servings",
+                     "Uses Up", "Shopping Ingredients", "Based On", "Grocery Run", "Source"}
 AGENT_MEAL_STATUSES = {"Suggested", "Skipped"}  # the agent never marks something cooked, planned or promoted
 
 
@@ -209,15 +208,16 @@ def register_kitchen_tools() -> None:
     add(Tool("get_reference", "Read a reference note: 'shelf-life' (expiry estimates by food and storage) or 'receipts' "
              "(decoding grocery receipt lines).", _obj({"name": S}, ["name"]), READ, _reference))
 
-    meal_fields = {"type": "object", "description": "Suggested Meals properties, e.g. Week, Cook By (YYYY-MM-DD), Course, Cuisine, "
-                   "Main Ingredient, Tags (list), Novelty (Regular/Twist/New), Servings, Active Time, Total Time (minutes), "
-                   "Est. Cost, Deals, Uses Up (list of pantry page ids), Shopping Ingredients, Based On (list of Cooking page ids), "
-                   "Grocery Run (link)", "properties": {}}
+    meal_fields = {"type": "object", "description": "Suggested Meals properties: Week, Cook By (YYYY-MM-DD), Course (Main, Side, Soup, "
+                   "Salad, Breakfast…), Cuisine, Main Ingredient, Tags (list: Bulk, Braise, Pressure Cooker, Quick, Sheet Pan, One Pot, "
+                   "Freezer-Friendly, New…), Effort (Easy, Moderate or Gourmet), Servings, Uses Up (list of pantry page ids), "
+                   "Shopping Ingredients, Based On (list of Cooking page ids), Grocery Run (link)", "properties": {}}
     add(Tool("meal_suggest", "Create a Suggested Meal in Notion (Status Suggested). Put the recipe in `body` using the "
-             "Cooking page style: a 📌 summary line, ## Ingredients (imperial and metric), ## Process (numbered, bold stage "
-             "labels and times/temps), ## Leftovers & storage, ## Notes.",
+             "Cooking page style: a 📌 summary line (why this week: the deals it uses with price and end date, what it uses up, "
+             "active/total time, estimated cost per serving), ## Ingredients (imperial and metric), ## Process (numbered, bold "
+             "stage labels and times/temps), ## Leftovers & storage, ## Notes.",
              _obj({"name": S, "fields": meal_fields, "body": S}, ["name", "fields", "body"]), SAFE, _meal_create))
-    add(Tool("meal_update", "Update the agent-owned fields of a Suggested Meal (not Rating/Feedback/Cooked On/Promote).",
+    add(Tool("meal_update", "Update the agent-owned fields of a Suggested Meal (not Feedback or Promote).",
              _obj({"page_id": S, "fields": meal_fields}, ["page_id", "fields"]), SAFE, _meal_update))
 
     item = {"type": "object", "properties": {"name": S, "quantity": S}, "required": ["name"]}

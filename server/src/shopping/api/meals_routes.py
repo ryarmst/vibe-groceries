@@ -19,7 +19,6 @@ from shopping.notion.kitchen import open_kitchen
 router = APIRouter(prefix="/api/meals", dependencies=[Depends(require_device)])
 
 STATUS_FOR = {"keep": "Planned", "reject": "Rejected", "cooked": "Cooked", "skip": "Skipped", "suggested": "Suggested"}
-RATINGS = {1: "★", 2: "★★", 3: "★★★", 4: "★★★★", 5: "★★★★★"}
 
 
 @router.get("")
@@ -36,28 +35,19 @@ async def meals(week: str | None = None, all_weeks: bool = False):
     from shopping.notion.props import options
 
     return {"week": wk, "meals": rows, "configured": True,
-            "options": {name: options(schema, name) for name in ("Status", "Rating", "Leftovers", "Tags", "Novelty") if name in schema}}
+            "options": {name: options(schema, name) for name in ("Status", "Tags", "Effort") if name in schema}}
 
 
 class DecisionBody(BaseModel):
     action: str = Field(pattern="^(keep|reject|cooked|skip|suggested)$")
-    rating: int | None = Field(default=None, ge=1, le=5)
-    leftovers: str | None = Field(default=None, max_length=32)
-    feedback: str | None = Field(default=None, max_length=2000)
-    cooked_on: str | None = None
+    feedback: str | None = Field(default=None, max_length=2000)  # in their own words: how it went, what to change
 
 
 @router.post("/{page_id}/decision")
 async def decide(page_id: str, body: DecisionBody, caller: Caller = Depends(require_device)):
     values: dict = {"Status": STATUS_FOR[body.action]}
-    if body.action == "cooked":
-        values["Cooked On"] = body.cooked_on or date.today().isoformat()
-    if body.rating:
-        values["Rating"] = RATINGS[body.rating]
-    if body.leftovers:
-        values["Leftovers"] = body.leftovers
     if body.feedback:
-        values["Feedback"] = f"{body.feedback.strip()} — {caller.name}"
+        values["Feedback"] = f"{body.feedback.strip()} — {caller.name} ({date.today():%b %-d})"
     async with open_kitchen() as k:
         result = await k.meal_update(page_id, values)
     with session_scope() as session:

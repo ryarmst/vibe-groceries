@@ -67,11 +67,12 @@ async def test_pantry_rules(notion):
 async def test_promote_meal_copies_to_cooking(notion):
     fake, k = notion
     body = text_to_blocks("📌 Weeknight braise\n## Ingredients\n- pork")
-    meal = fake.add(MEALS, {"Name": T("Carnitas"), "Status": {"name": "Cooked"}, "Tags": [{"name": "Braise"}],
+    meal = fake.add(MEALS, {"Name": T("Carnitas"), "Status": {"name": "Cooked"}, "Tags": [{"name": "Braise"}], "Effort": {"name": "Easy"},
                             "Shopping Ingredients": T("Serves: 6\nPork Shoulder | 3 lb")}, body)
     out = await k.promote_meal(meal)
     page = fake.pages[out["cooking_page"]]
     assert page["ds"] == COOKING and page["properties"]["Tags"]["multi_select"] == [{"name": "Braise"}]
+    assert page["properties"]["Effort"]["select"] == {"name": "Easy"}
     assert fake.blocks[out["cooking_page"]][0]["type"] == "callout"
     props = fake.pages[meal]["properties"]
     assert props["Status"]["status"]["name"] == "Promoted" and props["Promoted To"]["relation"] == [{"id": out["cooking_page"]}]

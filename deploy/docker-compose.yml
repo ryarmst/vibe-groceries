@@ -1,6 +1,8 @@
 # vibe-groceries on a VPS: Caddy (HTTPS, optional mTLS) in front of the app. Only Caddy is published.
 #   cp .env.example .env   # fill it in
 #   docker compose up -d --build
+name: vibe-groceries
+
 services:
   app:
     build: ../server

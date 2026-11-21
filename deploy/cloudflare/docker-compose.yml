@@ -2,6 +2,8 @@
 # cloudflared makes an outbound connection to Cloudflare, which handles HTTPS and client certificates.
 #   cp .env.example .env   # fill it in
 #   docker compose up -d --build
+name: vibe-groceries
+
 services:
   app:
     build: ../../server

@@ -37,6 +37,17 @@ def delete_secret(name: str, _: Caller = Depends(require_device)):
         return {"deleted": context.vault.delete(session, name), "secrets": context.vault.status(session)}
 
 
+@router.post("/notify/test")
+async def notify_test(_: Caller = Depends(require_device)):
+    from shopping.notify import push
+
+    try:
+        sent = await push.send("vibe-groceries test", "Deal alerts will arrive like this.")
+    except push.NotifyError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": sent, "error": None if sent else "No ntfy topic set (Settings → API keys)."}
+
+
 @router.get("")
 def all_settings(_: Caller = Depends(require_device)):
     with session_scope() as session:

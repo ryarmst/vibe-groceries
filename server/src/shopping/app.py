@@ -17,9 +17,8 @@ from shopping import context
 from shopping.api import auth_routes, chat_routes, inbox_routes, meals_routes, retailer_routes, settings_routes, shop_routes
 from shopping.api.deps import install_error_handlers
 from shopping.config import settings
-from shopping.core import catalog
 from shopping.core.cart_queue import queue as cart_queue
-from shopping.database import run_migrations, session_scope
+from shopping.database import run_migrations
 from shopping.jobs import scheduler
 from shopping.logging_setup import setup_logging
 
@@ -84,10 +83,7 @@ async def lifespan(_: FastAPI):
         log.warning("PCX_API_KEY is not set; retailer calls will fail (see README).")
     cart_queue.start()
     tasks = []
-    if settings.deal_scan_hours > 0:
-        tasks.append(asyncio.create_task(catalog.scan_loop(context.client, session_scope, store_id=settings.store_id,
-                                                           every_hours=settings.deal_scan_hours), name="deal-scan"))
-    if settings.jobs_enabled:
+    if settings.jobs_enabled:  # includes the daily deal scan + assessment (DEAL_SCAN_HOURS=0 turns that part off)
         tasks.append(asyncio.create_task(scheduler.run_forever(), name="jobs"))
     async with (mcp.session_manager.run() if mcp else contextlib.nullcontext()):
         log.info("vibe-groceries ready: store=%s data=%s mtls_required=%s mcp=%s", settings.store_id, settings.data_dir,

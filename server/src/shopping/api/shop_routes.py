@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
@@ -20,7 +22,7 @@ from shopping.core import service
 from shopping.core.cart_queue import queue as cart_queue
 from shopping.database import session_scope
 from shopping.models import (
-    PREFERENCE_KINDS, SEL_APPROVED, SEL_FAILED, PastOrder, Preference, PriceObservation, Product, Selection,
+    PREFERENCE_KINDS, SEL_APPROVED, SEL_FAILED, PastOrder, Preference, PriceObservation, Product, Selection, utcnow,
 )
 from shopping.retailer.client import RetailerError
 
@@ -162,6 +164,20 @@ async def cart_set(product_id: str, body: QtyBody):
     return {"ok": True}
 
 
+@router.post("/cart/{product_id}/add")
+async def cart_add(product_id: str, body: QtyBody):
+    """Add to the cart (on top of what's there) from anywhere: the Deals page, product pages."""
+    if not body.quantity:
+        raise service.ShoppingError("Quantity must be above zero.")
+    client = context.client()
+    c = await client.get_cart()
+    before = c.quantity_of(product_id)
+    with session_scope() as session:
+        await service.user_set_cart_quantity(session, client, product_id, before + body.quantity, source="deals")
+    return {"ok": True, "quantity": before + body.quantity,
+            "message": f"Added to the cart{f' (now {before + body.quantity:g})' if before else ''}."}
+
+
 class SubsBody(BaseModel):
     allowed: bool
     note: str | None = Field(default=None, max_length=250)
@@ -291,6 +307,32 @@ def aisles():
 async def deals_scan():
     started = catalog.start_scan(context.client(), session_scope, store_id=settings.store_id)
     return {"started": started}
+
+
+@router.post("/deals/assess")
+async def deals_assess():
+    """Refresh Today's top deals now (scanning first if the last scan is more than 20 hours old)."""
+    from shopping.jobs import deals as deals_job
+
+    with session_scope() as session:
+        last = catalog.last_scan(session)
+    fresh = last is not None and last.started_at > utcnow() - timedelta(hours=20)
+    if deals_job.running():
+        return {"started": False, "message": "Already assessing deals."}
+    if fresh:
+        result = await deals_job.run(scan=False)
+        return {"started": False, "done": True, **result,
+                "message": f"{result['top_deals']} top deals ({result['new']} new)." + (f" {result['alerts']} stock-up alert(s)." if result["alerts"] else "")}
+    deals_job.start(scan=True)
+    return {"started": True, "message": "Scanning every aisle, then assessing: about 3 minutes."}
+
+
+@router.get("/deals/assess")
+def deals_assess_status():
+    from shopping.jobs import deals as deals_job
+
+    with session_scope() as session:
+        return {"running": deals_job.running(), "last_scan": catalog.scan_dict(catalog.last_scan(session))}
 
 
 @router.get("/deals/top")

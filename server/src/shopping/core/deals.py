@@ -116,7 +116,7 @@ def deal_dict(session: Session, deal: TopDeal, *, store_id: str | None = None) -
         "suggested_quantity": deal.suggested_quantity,
         "product_id": p.retailer_product_id,
         "product": product_label(p),
-        "brand": p.brand, "name": p.name, "size": p.raw_size, "sold_by": p.sold_by,
+        "brand": p.brand, "name": p.name, "size": p.raw_size, "sold_by": p.sold_by, "aisle": p.aisle,
         "image_url": p.image_url,
         "link": f"https://www.nofrills.ca{p.link}" if p.link and p.link.startswith("/") else p.link,
         "price": round2(price),

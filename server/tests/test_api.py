@@ -184,3 +184,17 @@ def test_cli_pair_with_external_certificate(tmp_path, capsys):
     keyfile.write_text("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n")
     with pytest.raises(ValueError, match="private key"):
         cli.main(["pair", "--name", "x", "--cert-pem", str(keyfile)])
+
+
+def test_cart_add_adds_on_top(client, monkeypatch):
+    from shopping import context
+    from test_service import FakeClient
+
+    h, _ = pair_and_sign_in(client)
+    fake = FakeClient()
+    pid = list(fake.products)[0]
+    fake.cart[pid] = 2
+    monkeypatch.setattr(context, "client", lambda: fake)
+    r = client.post(f"/api/cart/{pid}/add", json={"quantity": 1}, headers=h)
+    assert r.status_code == 200 and r.json()["quantity"] == 3 and fake.cart[pid] == 3
+    assert client.post(f"/api/cart/{pid}/add", json={"quantity": 0}, headers=h).status_code == 400

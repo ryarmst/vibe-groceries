@@ -169,7 +169,7 @@ function notionCard(n) {
     h("p", { class: "small muted" }, "Create an internal integration in Notion, share these four databases with it, and save its token under API keys. ",
       "The data source id is the collection:// value (or the database URL's id)."),
     h("div", { class: "form-grid" }, field("Kitchen Pantry and Storage", inputs.pantry), field("Groceries", inputs.groceries),
-      field("Cooking", inputs.cooking), field("Suggested Meals", inputs.meals, "Leave empty until the database exists.")),
+      field("Cooking", inputs.cooking), field("Suggested Meals", inputs.meals)),
     h("div", { class: "row", style: { marginTop: "8px" } }, h("button", { class: "primary", onclick: (e) => busy(e.target, async () => {
       await put("/api/settings/notion", Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.value.trim()])));
       toast("Notion settings saved.");
@@ -184,15 +184,26 @@ function jobsCard(j) {
   const checkins = h("input", { type: "checkbox", checked: j.checkins_enabled });
   const checkinHour = h("input", { type: "number", min: 0, max: 23, value: j.checkin_hour, style: { width: "5em" } });
   const orders = h("input", { type: "checkbox", checked: j.order_import_enabled });
+  const dealsHour = h("input", { type: "number", min: 0, max: 23, value: j.deals_hour, style: { width: "5em" } });
+  const alerts = h("input", { type: "checkbox", checked: j.deal_alerts });
   return section("Schedule",
     h("label", { class: "row" }, enabled, "Plan the week automatically (meals + a shopping run to review)"),
     h("div", { class: "form-grid" }, field("Day (new flyer: Thursday)", dayIn), field("Hour", hour), field("Meals per week", meals)),
     h("label", { class: "row", style: { marginTop: "10px" } }, checkins, "Daily check-in on planned meals at", checkinHour, ":00"),
     h("label", { class: "row" }, orders, "Import new No Frills orders each evening (when the session is connected)"),
+    h("label", { class: "row", style: { marginTop: "10px" } }, "Check deals every day at", dealsHour, ":00 (no No Frills login needed)"),
+    h("label", { class: "row" }, alerts, "Send a phone alert for stock-up deals (needs an ntfy topic under API keys)",
+      h("button", { class: "link", onclick: async (e) => {
+        const r = await busy(e.target, () => post("/api/settings/notify/test"));
+        toast(r.ok ? "Test alert sent." : r.error, r.ok ? "ok" : "err");
+      } }, "Send test alert")),
+    h("p", { class: "small muted" }, "ntfy: install the ntfy app, subscribe to a long random topic name (e.g. vibe-groceries-", "k3j9x…), ",
+      "and save https://ntfy.sh/<that name> as the ntfy topic URL. Anyone who knows the name can read the alerts, so keep it random."),
     h("div", { class: "row", style: { marginTop: "8px" } }, h("button", { class: "primary", onclick: (e) => busy(e.target, async () => {
       await put("/api/settings/jobs", { weekly_plan_enabled: enabled.checked, weekly_plan_weekday: Number(dayIn.value),
         weekly_plan_hour: Number(hour.value), meals_per_week: Number(meals.value), checkins_enabled: checkins.checked,
-        checkin_hour: Number(checkinHour.value), order_import_enabled: orders.checked });
+        checkin_hour: Number(checkinHour.value), order_import_enabled: orders.checked,
+        deals_hour: Number(dealsHour.value), deal_alerts: alerts.checked });
       toast("Schedule saved.");
     }) }, "Save schedule")));
 }

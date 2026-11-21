@@ -59,6 +59,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "checkins_enabled": True,
         "checkin_hour": 17,
         "order_import_enabled": True,
+        "deals_hour": 6,  # daily: scan the store's deals, then refresh Today's top deals
+        "deal_alerts": True,  # push stock-up deals to ntfy (when a topic is set)
     },
 }
 
@@ -151,8 +153,8 @@ def _validate_jobs(v: dict) -> None:
         raise SettingsError("Weekly plan day must be 0–6 and hour 0–23.")
     if not 1 <= int(v["meals_per_week"]) <= 14:
         raise SettingsError("Meals per week must be 1–14.")
-    if not 0 <= int(v["checkin_hour"]) <= 23:
-        raise SettingsError("Check-in hour must be 0–23.")
+    if not 0 <= int(v["checkin_hour"]) <= 23 or not 0 <= int(v["deals_hour"]) <= 23:
+        raise SettingsError("Hours must be 0–23.")
 
 
 VALIDATORS = {"llm": _validate_llm, "budget": _validate_budget, "notion": _validate_notion, "jobs": _validate_jobs}

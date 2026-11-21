@@ -15,6 +15,7 @@ from shopping.config import settings
 from shopping.core import inbox
 from shopping.core import orders as ords
 from shopping.database import session_scope
+from shopping.jobs import deals as deals_job
 from shopping.jobs import weekly
 from shopping.meals import planner
 from shopping.models import AppSetting, PastOrder
@@ -112,6 +113,10 @@ async def tick(now: datetime) -> None:
                     and ((days_in == 0 and now.hour >= int(jobs["weekly_plan_hour"])) or days_in == 1))
         due_checkin = jobs["checkins_enabled"] and now.hour >= int(jobs["checkin_hour"]) and _marker(session, "checkins") != today
         due_orders = jobs["order_import_enabled"] and now.hour >= 20 and _marker(session, "orders") != today
+        due_deals = (settings.deal_scan_hours > 0 and now.hour >= int(jobs["deals_hour"]) and _marker(session, "deals") != today
+                     and not deals_job.running())
+        if due_deals:
+            _set_marker(session, "deals", today)
         due_backup = now.hour >= 3 and _marker(session, "backup") != today
         if due_backup:
             _set_marker(session, "backup", today)
@@ -123,6 +128,9 @@ async def tick(now: datetime) -> None:
             _set_marker(session, "orders", today)
         else:
             due_orders = False
+    if due_deals:
+        log.info("daily deals: scanning and assessing")
+        deals_job.start(scan=True)
     if due_backup:
         try:
             log.info("backup written: %s", await asyncio.to_thread(backup_database))

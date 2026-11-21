@@ -1,8 +1,22 @@
-// Chat with the assistant: threads, mode chips, streamed replies, tool activity, confirmation cards.
+// Chat with the assistant: threads, a task picker, streamed replies, tool activity, confirmation cards.
 import { del, get, post, stream } from "./api.js";
 import { busy, clear, h, link, openApp, richText, toast } from "./ui.js";
 
-const MODES = [["auto", "Auto"], ["ask", "Ask"], ["shop", "Shop"], ["meals", "Meals"], ["pantry", "Pantry"], ["recipes", "Recipes"]];
+// Each task gives the assistant focused instructions and only the tools for that job (more reliable, cheaper).
+const TASKS = [
+  { mode: "shop", icon: "🛒", title: "Shop for groceries", hint: "A shopping run from your list, regulars and this week's deals",
+    placeholder: "Anything specific? e.g. “we also need bread and soda”" },
+  { mode: "meals", icon: "🍽️", title: "Plan meals", hint: "Meals around the deals and what needs using up",
+    placeholder: "e.g. “plan this week's dinners” or “4 dinners, one vegetarian”" },
+  { mode: "pantry", icon: "🥫", title: "Update the pantry or list", hint: "Paste a receipt, used something up, add to the grocery list",
+    placeholder: "e.g. “we used up the eggs” or paste a receipt" },
+  { mode: "recipes", icon: "📖", title: "Find, cook or save a recipe", hint: "What can I make with…, look up or save to Cooking",
+    placeholder: "e.g. “what can I make with leeks and potatoes?”" },
+  { mode: "ask", icon: "❓", title: "Ask a question", hint: "Prices, deals, past orders, what's in the pantry",
+    placeholder: "e.g. “is $4.99 good for 18 eggs?”" },
+];
+const AUTO = { mode: "auto", icon: "✨", title: "Chosen automatically", placeholder: "Ask, shop, plan meals, or paste a receipt…" };
+const taskFor = (mode) => TASKS.find((t) => t.mode === mode) || AUTO;
 const TOOL_LABELS = {
   shopping_get_context: "Checking this week's deals", shopping_search_products: "Searching the store", shopping_search_catalog: "Searching the catalogue",
   shopping_create_run: "Starting a shopping run", shopping_add_selection: "Adding an item", shopping_add_choice_group: "Adding options",
@@ -12,16 +26,41 @@ const TOOL_LABELS = {
 };
 
 export function mountChat(root, { threadId = null, onThread = () => {} } = {}) {
-  let thread = threadId, mode = "auto", controller = null;
+  let thread = threadId, mode = "auto", controller = null, picking = false;
   const log = h("div", { class: "log" });
   const input = h("textarea", { rows: 2, placeholder: "Ask, shop, plan meals, or paste a receipt…  (Enter to send, Shift+Enter for a new line)" });
   const sendBtn = h("button", { class: "primary" }, "Send");
   const stopBtn = h("button", { hidden: true, onclick: () => controller?.abort() }, "Stop");
-  const chips = h("div", { class: "chips" });
+  const taskBar = h("div", { class: "row small" });
   const threadSelect = h("select", { style: { maxWidth: "60%" } });
 
-  function drawChips() {
-    clear(chips).append(...MODES.map(([k, label]) => h("button", { class: `chip ${k === mode ? "on" : ""}`, onclick: () => { mode = k; drawChips(); } }, label)));
+  function choose(m) {
+    mode = m;
+    picking = false;
+    drawTask();
+    const empty = log.querySelector(".task-picker");
+    if (empty) empty.remove();
+    input.focus();
+  }
+
+  function picker(compact = false) {
+    return h("div", { class: `task-picker ${compact ? "compact" : ""}` },
+      h("h3", { class: "picker-title" }, "What would you like to do?"),
+      h("div", { class: "task-grid" }, ...TASKS.map((t) => h("button", { class: `task ${t.mode === mode ? "on" : ""}`, onclick: () => choose(t.mode) },
+        h("span", { class: "task-icon" }, t.icon), h("span", {}, h("strong", {}, t.title), h("span", { class: "small muted block" }, t.hint))))),
+      h("p", { class: "small muted" }, "Or just type below and the assistant will work out the task."));
+  }
+
+  function drawTask() {
+    const t = taskFor(mode);
+    input.placeholder = t.placeholder + "  (Enter to send, Shift+Enter for a new line)";
+    clear(taskBar).append(h("span", { class: "muted" }, "Task:"), h("strong", {}, `${t.icon} ${t.title}`),
+      h("button", { class: "link", onclick: () => {
+        picking = !picking;
+        const existing = taskBar.parentElement.querySelector(".task-picker");
+        if (existing) existing.remove();
+        if (picking) taskBar.after(picker(true));
+      } }, picking ? "Close" : "Change"));
   }
 
   async function loadThreads() {
@@ -34,10 +73,10 @@ export function mountChat(root, { threadId = null, onThread = () => {} } = {}) {
     thread = id || null;
     onThread(thread);
     clear(log);
-    if (!thread) { log.append(h("div", { class: "muted small", style: { padding: "20px 4px" } }, "Try: “do a grocery shop, we need bread”, “plan the week around the deals”, “we used up the eggs”, or “what's a good price for chicken thighs?”")); return; }
+    if (!thread) { mode = "auto"; drawTask(); log.append(picker()); return; }
     const t = await get(`/api/chat/threads/${thread}`);
     mode = t.mode || "auto";
-    drawChips();
+    drawTask();
     for (const m of t.messages) renderStored(m);
     log.scrollTop = log.scrollHeight;
   }
@@ -116,6 +155,10 @@ export function mountChat(root, { threadId = null, onThread = () => {} } = {}) {
       clear(log);
     }
     input.value = "";
+    log.querySelector(".task-picker")?.remove();
+    root.querySelector(".composer .task-picker")?.remove();
+    picking = false;
+    drawTask();
     log.append(h("div", { class: "msg user" }, h("div", { class: "bubble" }, textValue)));
     await run(`/api/chat/threads/${thread}/messages`, { text: textValue, mode });
     loadThreads();
@@ -134,10 +177,10 @@ export function mountChat(root, { threadId = null, onThread = () => {} } = {}) {
         await del(`/api/chat/threads/${thread}`); toast("Deleted."); await loadThreads(); open(null);
       } }, "🗑")),
     log,
-    h("div", { class: "composer" }, chips, h("div", { style: { marginTop: "6px" } }, input),
+    h("div", { class: "composer" }, taskBar, h("div", { style: { marginTop: "6px" } }, input),
       h("div", { class: "row", style: { marginTop: "6px" } }, h("span", { class: "small muted" }, "Changes to Notion ask before they happen."),
         h("span", { class: "spacer" }), stopBtn, sendBtn))));
-  drawChips();
+  drawTask();
   loadThreads().then(() => open(thread)).catch((e) => log.append(h("div", { class: "flash err" }, e.message)));
   return { open };
 }

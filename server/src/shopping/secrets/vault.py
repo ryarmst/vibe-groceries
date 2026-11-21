@@ -34,6 +34,7 @@ KNOWN = {
     "llm:openrouter": "OpenRouter API key",
     "llm:mistral": "Mistral API key",
     "llm:custom": "API key for a custom OpenAI-compatible endpoint",
+    "notify:ntfy": "ntfy topic URL for deal alerts (optional)",
 }
 
 

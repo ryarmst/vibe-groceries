@@ -134,7 +134,7 @@ async def test_llm(body: TestBody):
     text, usage = "", None
     try:
         async for ev in provider.stream(system="Reply with exactly: OK", messages=[{"role": "user", "content": "ping"}],
-                                        tools=[], model=body.model, temperature=0, max_tokens=20):
+                                        tools=[], model=body.model, temperature=0, max_tokens=1000):  # room for "thinking" models
             if hasattr(ev, "text"):
                 text += ev.text
             elif ev.__class__.__name__ == "Usage":

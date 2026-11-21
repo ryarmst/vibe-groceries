@@ -128,7 +128,7 @@ async def _ask(system: str, user: str) -> tuple[str, tuple[str, str], Usage]:
                 provider = providers.build(session, context.vault, c["provider"])
             text, usage = "", Usage()
             async for ev in provider.stream(system=system, messages=[{"role": "user", "content": user}], tools=[],
-                                            model=c["model"], temperature=0.3, max_tokens=2000):
+                                            model=c["model"], temperature=0.3, max_tokens=8000):  # thinking models spend tokens before answering
                 if isinstance(ev, TextDelta):
                     text += ev.text
                 elif isinstance(ev, Usage):

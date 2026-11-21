@@ -34,7 +34,7 @@ from shopping.models import ChatMessage, ChatThread
 log = logging.getLogger(__name__)
 
 HISTORY_USER_TURNS = 12
-MAX_TOKENS = 4096
+MAX_TOKENS = 8192  # includes "thinking" tokens on reasoning models
 
 
 def _history(messages: list[ChatMessage]) -> list[dict]:

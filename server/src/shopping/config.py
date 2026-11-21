@@ -37,6 +37,11 @@ class Settings:
     # -- v2 --------------------------------------------------------------------------------
     master_key_b64: str = ""  # MASTER_KEY: 32 random bytes, base64; encrypts the secrets vault
     mtls_required: bool = False  # require the proxy-verified client-certificate fingerprint on every API call
+    # Header the proxy uses for the verified client certificate's SHA-256 fingerprint:
+    # Caddy (deploy/) sets x-client-cert-sha256; Cloudflare's "Add TLS client auth headers" sets cf-cert-sha256.
+    cert_header: str = "x-client-cert-sha256"
+    cert_verified_header: str = ""  # optional: a header that must equal "true" (Cloudflare: cf-cert-verified)
+    client_ip_header: str = ""  # header with the real client IP set by the proxy (Cloudflare: cf-connecting-ip)
     mcp_enabled: bool = False  # the v1 MCP endpoint (for Claude Desktop/Code); behind device auth when on
     timezone: str = "America/Toronto"
     monthly_budget_usd: float = 10.0  # default LLM spend cap; adjustable at runtime from the extension
@@ -90,6 +95,9 @@ def load_settings() -> Settings:
         allowed_hosts=list(dict.fromkeys(h.strip() for h in hosts.split(",") if h.strip())),
         master_key_b64=os.environ.get("MASTER_KEY", ""),
         mtls_required=_bool("MTLS_REQUIRED", False),
+        cert_header=os.environ.get("CERT_HEADER", "x-client-cert-sha256").strip().lower(),
+        cert_verified_header=os.environ.get("CERT_VERIFIED_HEADER", "").strip().lower(),
+        client_ip_header=os.environ.get("CLIENT_IP_HEADER", "").strip().lower(),
         mcp_enabled=_bool("MCP_ENABLED", False),
         timezone=os.environ.get("TZ", "America/Toronto"),
         monthly_budget_usd=float(os.environ.get("MONTHLY_BUDGET_USD", "10")),

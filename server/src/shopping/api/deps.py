@@ -24,7 +24,6 @@ from shopping.secrets.vault import VaultError
 
 log = logging.getLogger(__name__)
 
-CERT_HEADER = "x-client-cert-sha256"  # set by the reverse proxy from the verified client certificate
 
 auth_limiter = RateLimiter(limit=20, window_seconds=60)  # pairing and sign-in, per client IP
 api_limiter = RateLimiter(limit=600, window_seconds=60)  # everything else, per device
@@ -39,11 +38,19 @@ class Caller:
 
 
 def client_ip(request: Request) -> str:
+    """For rate limiting. Behind Cloudflare use its CF-Connecting-IP (always set by Cloudflare, so it can't be
+    spoofed the way a client-supplied X-Forwarded-For can)."""
+    if settings.client_ip_header and request.headers.get(settings.client_ip_header):
+        return request.headers[settings.client_ip_header].strip()
     return request.client.host if request.client else "unknown"
 
 
 def cert_fingerprint(request: Request) -> str | None:
-    return dev.normalize_fingerprint(request.headers.get(CERT_HEADER))
+    """The verified client certificate's fingerprint, as passed by the proxy (Caddy or Cloudflare).
+    Only trustworthy because the app is reachable solely through that proxy, which sets the header."""
+    if settings.cert_verified_header and request.headers.get(settings.cert_verified_header, "").lower() != "true":
+        return None
+    return dev.normalize_fingerprint(request.headers.get(settings.cert_header))
 
 
 def limit_auth(request: Request) -> None:

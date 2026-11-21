@@ -78,3 +78,11 @@ def issue_client_cert(ca_dir: Path, device_name: str, *, days: int = 730) -> tup
                                                 serialization.BestAvailableEncryption(password.encode()))
     fingerprint = hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()
     return p12, password, fingerprint
+
+
+def fingerprint_of_pem(pem: bytes) -> str:
+    """SHA-256 fingerprint (hex) of a PEM certificate, as proxies report it. Refuses private keys."""
+    if b"PRIVATE KEY" in pem:
+        raise ValueError("That file contains a private key; give only the certificate (cert.pem).")
+    cert = x509.load_pem_x509_certificate(pem)
+    return hashlib.sha256(cert.public_bytes(serialization.Encoding.DER)).hexdigest()

@@ -1,6 +1,7 @@
 """`vibe` command-line tool for the server operator (run inside the container):
 
   vibe pair --name "Ryan laptop" [--cert]   one-time pairing code (and, with --cert, a client certificate)
+  vibe pair --name NAME --cert-pem FILE|-    pairing code bound to a certificate issued elsewhere (e.g. Cloudflare)
   vibe devices                               list paired devices
   vibe revoke DEVICE_ID                      revoke a device immediately
   vibe ca                                    create the client-certificate CA (prints the path of ca.pem)
@@ -23,6 +24,8 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--name", required=True, help="device name, e.g. 'Steph laptop'")
     pp.add_argument("--cert", action="store_true", help="also issue an mTLS client certificate (.p12)")
     pp.add_argument("--out", default=None, help="where to write the .p12 (default: DATA_DIR/certs)")
+    pp.add_argument("--cert-pem", default=None, help="bind to an existing client certificate (PEM file, or - for stdin)")
+    pp.add_argument("--cert-fingerprint", default=None, help="bind to a certificate by its SHA-256 fingerprint")
     sub.add_parser("devices", help="list devices")
     pr = sub.add_parser("revoke", help="revoke a device")
     pr.add_argument("device_id")
@@ -47,6 +50,19 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "pair":
         fingerprint = None
+        if args.cert_pem or args.cert_fingerprint:
+            if args.cert:
+                print("Use either --cert (issue one here) or --cert-pem/--cert-fingerprint (bring one), not both.")
+                return 2
+            if args.cert_pem:
+                pem = sys.stdin.buffer.read() if args.cert_pem == "-" else Path(args.cert_pem).read_bytes()
+                fingerprint = certs.fingerprint_of_pem(pem)
+            else:
+                fingerprint = dev.normalize_fingerprint(args.cert_fingerprint)
+                if not fingerprint:
+                    print("That isn't a SHA-256 fingerprint (64 hex characters, colons optional).")
+                    return 2
+            print(f"Bound to client certificate sha256 {fingerprint}")
         if args.cert:
             certs.init_ca(ca_dir, public_dir=public_dir)
             p12, password, fingerprint = certs.issue_client_cert(ca_dir, args.name)

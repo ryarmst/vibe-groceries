@@ -144,3 +144,43 @@ def test_run_view_over_the_api(client):
     assert r.status_code == 200
     fb = client.get("/api/history/feedback", headers=h).json()["records"]
     assert fb[0]["note"] == "have two jars" and fb[0]["device_id"]  # attributed to the device
+
+
+def test_cloudflare_header_mode(client, monkeypatch):
+    cf = dataclasses.replace(settings, mtls_required=True, cert_header="cf-cert-sha256", cert_verified_header="cf-cert-verified")
+    for mod in (deps, auth_routes):
+        monkeypatch.setattr(mod, "settings", cf)
+    good = {"cf-cert-sha256": "ab" * 32, "cf-cert-verified": "true"}
+    h, _ = pair_and_sign_in(client, headers=good)
+    assert client.get("/api/inbox", headers=h).status_code == 200
+    # Not verified by Cloudflare, or the Caddy-style header instead: treated as no certificate.
+    assert client.get("/api/inbox", headers={**h, "cf-cert-verified": "false"}).status_code == 401
+    caddy_style = {"authorization": h["authorization"], "x-client-cert-sha256": "ab" * 32}
+    assert client.get("/api/inbox", headers=caddy_style).status_code == 401
+
+
+def test_cli_pair_with_external_certificate(tmp_path, capsys):
+    from shopping import cli
+    from shopping.auth import certs
+    from shopping.models import PairingCode
+
+    ca = tmp_path / "ca"
+    certs.init_ca(ca)
+    p12, password, fp = certs.issue_client_cert(ca, "Elsewhere")
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.serialization import pkcs12
+
+    _, cert, _ = pkcs12.load_key_and_certificates(p12, password.encode())
+    pem = tmp_path / "cert.pem"
+    pem.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    assert cli.main(["pair", "--name", "CF browser", "--cert-pem", str(pem)]) == 0
+    assert fp in capsys.readouterr().out
+    with session_scope() as s:
+        assert s.query(PairingCode).order_by(PairingCode.id.desc()).first().cert_fingerprint == fp
+    colons = ":".join(fp[i:i + 2] for i in range(0, 64, 2)).upper()
+    assert cli.main(["pair", "--name", "x", "--cert-fingerprint", colons]) == 0
+    assert cli.main(["pair", "--name", "x", "--cert-fingerprint", "nope"]) == 2
+    keyfile = tmp_path / "key.pem"
+    keyfile.write_text("-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n")
+    with pytest.raises(ValueError, match="private key"):
+        cli.main(["pair", "--name", "x", "--cert-pem", str(keyfile)])

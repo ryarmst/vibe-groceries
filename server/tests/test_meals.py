@@ -41,6 +41,9 @@ async def test_candidates_and_cost(session):
     fake.add(COOKING, {"Name": T("Carnitas"), "Regular Recipe?": True, "Shopping Ingredients": T("Serves: 6\nPork Shoulder | 3 lb\nCilantro | 1 bunch")})
     fake.add(COOKING, {"Name": T("Plain Toast"), "Regular Recipe?": True, "Shopping Ingredients": T("Serves: 2\nBread | 1 loaf")})
     fake.add(MEALS, {"Name": T("Plain Toast"), "Status": {"name": "Rejected"}, "Feedback": T("boring")})
+    fake.add(COOKING, {"Name": T("Cilantro Lime Rice"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Cilantro")})
+    fake.add(COOKING, {"Name": T("Stewed Pork"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Pork Shoulder")})
+    fake.add(COOKING, {"Name": T("Plain Rice"), "Type": {"name": "Recipe"}, "Main Ingredient": T("Rice")})  # nothing favours it
     kmod._schema_cache.clear()
     client = NotionClient("x", transport=httpx.MockTransport(fake.handler))
     client.MIN_INTERVAL = 0
@@ -50,6 +53,9 @@ async def test_candidates_and_cost(session):
     assert first["name"] == "Carnitas" and first["uses_up"][0]["name"] == "Cilantro" and first["ingredients_on_sale"]
     assert last["name"] == "Plain Toast" and last["previously_rejected"] and last["last_feedback"] == "boring"
     assert out["expiring_on_hand"][0]["name"] == "Cilantro"
+    assert out["discovery_mode"] and out["note"]
+    saved = [c["name"] for c in out["saved_recipes"]]
+    assert saved == ["Cilantro Lime Rice", "Stewed Pork"]  # uses up the cilantro (10) > main ingredient on sale (6)
     cost = planner.cost_manifest(session, "Serves: 6\nPork Shoulder | 3 lb\nCilantro | 1 bunch\nUnobtainium | 1")
     assert cost["estimated_total"] == 14.15 and cost["per_serving"] == 2.36 and cost["not_found"] == ["Unobtainium"]
 

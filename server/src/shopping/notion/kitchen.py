@@ -204,12 +204,15 @@ class Kitchen:
         return {"updated": page_id, "status": status}
 
     # -- cooking ---------------------------------------------------------------------------
-    async def cooking_search(self, query: str = "", *, regular_only: bool = False, limit: int = 25) -> list[dict]:
+    async def cooking_search(self, query: str = "", *, regular_only: bool = False, recipes_only: bool = False,
+                             limit: int = 25) -> list[dict]:
         filters = []
         if query:
             filters.append({"property": "Name", "title": {"contains": query}})
         if regular_only:
             filters.append({"property": "Regular Recipe?", "checkbox": {"equals": True}})
+        if recipes_only:
+            filters.append({"property": "Type", "select": {"equals": "Recipe"}})
         filt = {"and": filters} if len(filters) > 1 else (filters[0] if filters else None)
         rows = await self.rows("cooking", filter=filt, cache=False, limit=limit)
         keep = ("Name", "Type", "Course", "Cuisine", "Main Ingredient", "Tags", "Regular Recipe?", "Shopping Ingredients", "Reference")

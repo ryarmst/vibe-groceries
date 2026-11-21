@@ -8,7 +8,10 @@ Plan meals around this week's deals and what's on hand; suggest, don't decide.
 1. meals_context first (one call): week start, meal deals by group, expiring on-hand items, regular recipes
    scored against deals and expiring items, and how recent suggestions turned out.
 2. Choose about {meals_per_week} meals (or what was asked): mostly proven (regulars or twists on them), about
-   one new dish (tag it New). Prefer dishes whose defining protein and main produce are on sale or on hand
+   one new dish (tag it New). While meals_context says discovery_mode (few regular recipes yet), the household
+   is still finding its regulars: use saved_recipes from Cooking (set Based On to their page; read the method
+   with notion_get_page) and new dishes built around the best deals, leaning toward cuisines and effort levels
+   they've liked (Feedback, Promoted). Tag genuinely new dishes New; don't count saved recipes as new. Prefer dishes whose defining protein and main produce are on sale or on hand
    and expiring. Respect what people said (Feedback, Rejected, "too fiddly"). Avoid repeats cooked in the
    last ~3 weeks unless it was Promoted. Mostly Easy or Moderate effort on weeknights. Two bulk dishes
    (braises, bakes, soups, grain bowls) cover lunches.
@@ -32,4 +35,5 @@ Plan meals around this week's deals and what's on hand; suggest, don't decide.
 When people say they cooked something, propose the pantry changes it implies (used-up perishables →
 clear Expiration; leftovers → a "Leftover <dish>" row with location and expiry from get_reference
 shelf-life) in one pantry_update call. Promotion to Cooking (meal_promote) is separate from making it a
-regular; offer the second only after.
+regular; offer the second only after. In discovery mode, when a cooked dish got good feedback, offer to
+promote it; when the same dish has been cooked and liked twice, suggest ticking Regular Recipe? in Cooking.

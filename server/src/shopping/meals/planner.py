@@ -74,46 +74,97 @@ def cost_manifest(session: Session, manifest: str) -> dict:
             "note": "Estimate: one package of the usual product per ingredient, current prices."}
 
 
+DISCOVERY_REGULARS = 8  # fewer regular recipes than this: the household is still finding its regulars
+
+
 async def candidates(session: Session, kitchen: Kitchen, *, expiring_days: int = 7, limit: int = 12) -> dict:
-    """Regular recipes ranked for this week: deals they'd use, expiring pantry items they'd use up, and
-    whether they were cooked (or rejected) recently."""
-    regulars = await kitchen.cooking_search(regular_only=True, limit=100)
+    """Recipes ranked for this week: regular recipes (scored on their Shopping Ingredients) and, while there are
+    few regulars, saved Cooking recipes scored on their Main Ingredient. Both get points for deals they'd use and
+    expiring pantry items they'd use up, and lose points if cooked recently or rejected."""
     expiring = await kitchen.expiring(expiring_days)
     expiring_names = {norm(r["Name"]): r for r in expiring}
     recent: dict[str, dict] = {}
     try:
-        for m in await kitchen.meals(limit=100):
+        for m in await kitchen.meals(limit=200):
             if m.get("Name"):
                 recent[norm(m["Name"])] = m
     except Exception:  # noqa: BLE001 - the Meals database may not exist yet
         pass
-    out = []
     cutoff = (date.today() - timedelta(days=21)).isoformat()
-    for r in regulars:
-        serves, items = parse_manifest(r.get("Shopping Ingredients"))
-        on_sale, uses_up = [], []
-        for it in items:
-            key = norm(it["name"])
-            if key in expiring_names:
-                uses_up.append({"name": expiring_names[key]["Name"], "expires": expiring_names[key]["Expiration"]})
-            p = price_ingredient(session, it["name"])
-            if p and p.get("discount_pct"):
-                on_sale.append({"ingredient": it["name"], "product": p["name"], "price": p["price"],
-                                "discount_pct": p["discount_pct"], "ends": p.get("deal_ends")})
-        last = recent.get(norm(r.get("Name") or ""))
+    price_cache: dict[str, dict | None] = {}
+
+    def priced(name: str) -> dict | None:
+        key = norm(name)
+        if key not in price_cache:
+            price_cache[key] = price_ingredient(session, name)
+        return price_cache[key]
+
+    def history(name: str) -> tuple[dict | None, bool, bool, int]:
+        last = recent.get(norm(name or ""))
         cooked_recently = bool(last and last.get("Status") in ("Cooked", "Promoted") and (last.get("Week") or "") >= cutoff)
         rejected = bool(last and last.get("Status") == "Rejected")
-        score = 10 * len(uses_up) + 4 * len(on_sale) - (15 if cooked_recently else 0) - (20 if rejected else 0)
-        if last and last.get("Status") == "Promoted":
-            score += 5  # a keeper
-        out.append({"cooking_id": r["id"], "name": r.get("Name"), "tags": r.get("Tags"), "main_ingredient": r.get("Main Ingredient"),
-                    "serves": serves, "has_manifest": bool(items), "uses_up": uses_up, "ingredients_on_sale": on_sale,
+        adj = -(15 if cooked_recently else 0) - (20 if rejected else 0) + (5 if last and last.get("Status") == "Promoted" else 0)
+        return last, cooked_recently, rejected, adj
+
+    def uses_up_for(names: list[str]) -> list[dict]:
+        out = []
+        for n in names:
+            hit = expiring_names.get(norm(n))
+            if hit and all(u["name"] != hit["Name"] for u in out):
+                out.append({"name": hit["Name"], "expires": hit["Expiration"]})
+        return out
+
+    def deal_for(name: str) -> dict | None:
+        p = priced(name)
+        if p and p.get("discount_pct"):
+            return {"ingredient": name, "product": p["name"], "price": p["price"], "discount_pct": p["discount_pct"], "ends": p.get("deal_ends")}
+        return None
+
+    regulars = await kitchen.cooking_search(regular_only=True, limit=100)
+    out = []
+    for r in regulars:
+        serves, items = parse_manifest(r.get("Shopping Ingredients"))
+        names = [it["name"] for it in items] or [r.get("Main Ingredient") or ""]
+        uses_up = uses_up_for(names)
+        on_sale = [d for d in (deal_for(n) for n in names if n) if d]
+        last, cooked_recently, rejected, adj = history(r.get("Name"))
+        out.append({"cooking_id": r["id"], "name": r.get("Name"), "kind": "regular", "tags": r.get("Tags"),
+                    "effort": r.get("Effort"), "main_ingredient": r.get("Main Ingredient"), "serves": serves,
+                    "has_manifest": bool(items), "uses_up": uses_up, "ingredients_on_sale": on_sale,
                     "cooked_recently": cooked_recently, "previously_rejected": rejected,
-                    "last_feedback": (last or {}).get("Feedback"), "score": score})
+                    "last_feedback": (last or {}).get("Feedback"), "score": 10 * len(uses_up) + 4 * len(on_sale) + 3 + adj})
+
+    discovery = len(regulars) < DISCOVERY_REGULARS
+    saved = []
+    if discovery:
+        regular_ids = {r["id"] for r in regulars}
+        for r in await kitchen.cooking_search(recipes_only=True, limit=400):
+            main = (r.get("Main Ingredient") or "").strip()
+            if r["id"] in regular_ids or not main:
+                continue
+            uses_up = uses_up_for([main, r.get("Name") or ""])
+            deal = deal_for(main)
+            last, cooked_recently, rejected, adj = history(r.get("Name"))
+            score = 10 * len(uses_up) + (6 if deal else 0) + adj
+            if score <= 0:
+                continue  # nothing about this week favours it
+            saved.append({"cooking_id": r["id"], "name": r.get("Name"), "kind": "saved_recipe", "tags": r.get("Tags"),
+                          "effort": r.get("Effort"), "course": r.get("Course"), "cuisine": r.get("Cuisine"), "main_ingredient": main,
+                          "uses_up": uses_up, "main_ingredient_deal": deal, "cooked_recently": cooked_recently,
+                          "previously_rejected": rejected, "last_feedback": (last or {}).get("Feedback"), "score": score})
+        saved.sort(key=lambda c: -c["score"])
     out.sort(key=lambda c: -c["score"])
-    return {"regular_recipes": out[:limit], "expiring_on_hand": [{"name": e["Name"], "expires": e["Expiration"],
-                                                                   "where": f"{e.get('Location') or ''} / {e.get('Sub-Location') or ''}"}
-                                                                  for e in expiring]}
+    return {
+        "discovery_mode": discovery,
+        "note": ("Few regular recipes yet: the household is still finding its regulars. Draw on saved_recipes (their Cooking "
+                 "pages have the method; read one with notion_get_page) and new dishes built around the best deals; "
+                 "after a meal is cooked and liked, offer to promote it and, if it keeps coming back, to make it a regular.")
+                if discovery else None,
+        "regular_recipes": out[:limit],
+        "saved_recipes": saved[:limit],
+        "expiring_on_hand": [{"name": e["Name"], "expires": e["Expiration"], "where": f"{e.get('Location') or ''} / {e.get('Sub-Location') or ''}"}
+                             for e in expiring],
+    }
 
 
 def recent_meal_history(meals: list[dict], *, weeks: int = 6) -> dict:
